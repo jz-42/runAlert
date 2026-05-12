@@ -1,0 +1,69 @@
+{
+  "name": "runalert",
+  "version": "0.1.0-beta.2",
+  "private": true,
+  "description": "Track Minecraft speedruns and alert viewers when a run becomes worth watching.",
+  "author": "Jerry Zhan",
+  "type": "commonjs",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "node src/watcher/run_watcher.js",
+    "start:web": "node src/api/start_server.js",
+    "dashboard:dev": "npm --prefix dashboard run dev",
+    "dashboard:build": "npm --prefix dashboard run build",
+    "electron": "ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache electron .",
+    "electron:dev": "concurrently -k -n dashboard,electron \"VITE_API_BASE=http://127.0.0.1:18787 npm --prefix dashboard run dev -- --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache RUNALERT_ELECTRON_DEV=1 RUNALERT_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
+    "electron:build": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --dir",
+    "electron:pack:mac": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --mac dmg zip",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:backend": "vitest run",
+    "test:dashboard": "npm --prefix dashboard test",
+    "test:layout": "npm --prefix dashboard run test:layout",
+    "test:visual": "npm --prefix dashboard run test:visual",
+    "test:visual:update": "npm --prefix dashboard run test:visual:update",
+    "test:all": "npm run test:backend && npm run test:dashboard && npm run test:layout",
+    "test:all:with-visual": "npm run test:all && npm run test:visual"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "node-notifier": "^10.0.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "electron": "^42.0.1",
+    "electron-builder": "^26.8.1",
+    "supertest": "^6.3.4",
+    "vitest": "^2.1.8",
+    "wait-on": "^9.0.6"
+  },
+  "build": {
+    "appId": "app.runalert.desktop",
+    "productName": "runAlert",
+    "icon": "dashboard/public/icon-1024.png",
+    "directories": {
+      "output": "dist-app"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "dashboard/dist/**/*",
+      "config.json",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}

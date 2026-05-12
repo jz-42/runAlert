@@ -1,0 +1,80 @@
+{
+  "streamers": [
+    "xQcOW"
+  ],
+  "clock": "IGT",
+  "quietHours": [],
+  "notifications": {
+    "enabled": true,
+    "sound": true
+  },
+  "agent": {
+    "autoUpdate": true,
+    "forsenOcr": false
+  },
+  "channels": [
+    "desktop"
+  ],
+  "defaultMilestones": {
+    "nether": {
+      "thresholdSec": 3600,
+      "enabled": true
+    },
+    "bastion": {
+      "thresholdSec": 3600,
+      "enabled": true
+    },
+    "fortress": {
+      "thresholdSec": 3600,
+      "enabled": true
+    },
+    "first_portal": {
+      "thresholdSec": 3600,
+      "enabled": true
+    },
+    "stronghold": {
+      "thresholdSec": 3600,
+      "enabled": true
+    },
+    "end": {
+      "thresholdSec": 3600,
+      "enabled": true
+    },
+    "finish": {
+      "thresholdSec": 3600,
+      "enabled": true
+    }
+  },
+  "profiles": {
+    "xQcOW": {
+      "nether": {
+        "thresholdSec": 240,
+        "enabled": true
+      },
+      "bastion": {
+        "thresholdSec": 360,
+        "enabled": true
+      },
+      "fortress": {
+        "thresholdSec": 600,
+        "enabled": true
+      },
+      "first_portal": {
+        "thresholdSec": 720,
+        "enabled": true
+      },
+      "stronghold": {
+        "thresholdSec": 840,
+        "enabled": true
+      },
+      "end": {
+        "thresholdSec": 960,
+        "enabled": true
+      },
+      "finish": {
+        "thresholdSec": 928,
+        "enabled": true
+      }
+    }
+  }
+}

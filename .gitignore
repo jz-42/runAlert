@@ -1,0 +1,46 @@
+.DS_Store
+.claude/
+.conductor/
+sent_keys.json
+VISION.md
+LAUNCH_WEEK_PLAN.md
+TECH_NOTES.md
+docs/EXECUTION_PLAN.md
+docs/superpowers/
+ecosystem.config.cjs
+notify/discord.js
+scripts/publish-beta.sh
+
+# Local backups and scratch areas
+dev_nested_backup/
+dev/
+beta/
+
+# Dependencies
+node_modules/
+dashboard/node_modules/
+
+# Local env and config
+.env
+.env.*
+**/CONTEXT.md
+
+# Build output and caches
+dist-app/
+dashboard/dist/
+coverage/
+.electron-cache/
+.electron-builder-cache/
+.npm-cache/
+.npm-cache-root/
+**/test-results/
+
+# Editor settings
+**/.vscode/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

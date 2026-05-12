@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: runalert-web
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm --prefix dashboard ci && npm --prefix dashboard run build
+    startCommand: npm run start:web
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AGENT_REPO_URL
+        value: https://github.com/jz-42/runAlert.git
+      - key: TWITCH_CLIENT_ID
+        sync: false
+      - key: TWITCH_CLIENT_SECRET
+        sync: false
+      - key: RUNALERT_MAC_DMG_URL
+        sync: false
+      - key: RUNALERT_MAC_ZIP_URL
+        sync: false

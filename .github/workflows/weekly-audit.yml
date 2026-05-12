@@ -1,0 +1,102 @@
+name: Weekly audit
+
+on:
+  schedule:
+    # 10:00 AM America/Los_Angeles during daylight saving time.
+    # GitHub Actions cron uses UTC, so this will run at 9:00 AM local during standard time.
+    - cron: "0 17 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: weekly-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            dashboard/package-lock.json
+
+      - name: Install backend deps
+        run: npm ci
+
+      - name: Run backend tests
+        id: backend
+        continue-on-error: true
+        run: npm test
+
+      - name: Install dashboard deps
+        run: npm ci
+        working-directory: dashboard
+
+      - name: Run dashboard tests
+        id: dashboard
+        continue-on-error: true
+        run: npm test
+        working-directory: dashboard
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox
+        working-directory: dashboard
+
+      - name: Run dashboard layout tests
+        id: layout
+        continue-on-error: true
+        run: npm run test:layout
+        working-directory: dashboard
+
+      - name: Write audit summary
+        if: always()
+        run: |
+          mkdir -p .github/audit-artifacts
+          {
+            echo "# Weekly audit summary"
+            echo
+            echo "- Repository: DEV"
+            echo "- Trigger: ${{ github.event_name }}"
+            echo "- Commit: ${{ github.sha }}"
+            echo "- Backend tests: ${{ steps.backend.outcome }}"
+            echo "- Dashboard tests: ${{ steps.dashboard.outcome }}"
+            echo "- Layout tests: ${{ steps.layout.outcome }}"
+            echo
+            echo "## Commands"
+            echo
+            echo "- \`npm test\`"
+            echo "- \`npm test\` (in \`dashboard/\`)"
+            echo "- \`npm run test:layout\` (in \`dashboard/\`)"
+          } | tee .github/audit-artifacts/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload audit summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-audit-summary
+          path: .github/audit-artifacts/summary.md
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-playwright-artifacts
+          path: |
+            dashboard/test-results
+            dashboard/playwright-report
+
+      - name: Fail if any audit checks failed
+        if: always()
+        run: |
+          if [ "${{ steps.backend.outcome }}" != "success" ] || \
+             [ "${{ steps.dashboard.outcome }}" != "success" ] || \
+             [ "${{ steps.layout.outcome }}" != "success" ]; then
+            exit 1
+          fi
