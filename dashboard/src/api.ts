@@ -30,6 +30,12 @@ function getDesktopTwitchStatusBase() {
   return typeof base === "string" ? base.trim() : "";
 }
 
+function getWindowOrigin() {
+  if (typeof window === "undefined") return "";
+  const origin = window.location?.origin;
+  return typeof origin === "string" ? origin.trim() : "";
+}
+
 export function getTwitchStatusBase() {
   if (isDesktopApp()) {
     const desktopBase = getDesktopTwitchStatusBase();
@@ -39,7 +45,7 @@ export function getTwitchStatusBase() {
       ? ""
       : "https://runalert.app";
   }
-  return TWITCH_STATUS_BASE || API_BASE;
+  return TWITCH_STATUS_BASE || API_BASE || getWindowOrigin();
 }
 
 function generateToken() {
