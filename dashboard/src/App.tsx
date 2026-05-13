@@ -271,6 +271,7 @@ function App() {
   const appDownloadBase = API_BASE || "";
   const macAppDownloadUrl = `${appDownloadBase}/download/macos/dmg`;
   const macAppZipUrl = `${appDownloadBase}/download/macos/zip`;
+  const windowsAppDownloadUrl = `${appDownloadBase}/download/windows/exe`;
 
   const milestoneEntries = Object.entries(draft);
   const anyMilestones = milestoneEntries.length > 0;
@@ -1492,8 +1493,9 @@ function App() {
               <span className="modeTitle">Desktop app</span>
             </div>
             <div className="modeText">
-              Background alerts after the app window is closed. Mac beta
-              builds are unsigned while the app is still being tested.
+              Background alerts after the app window is closed. Mac and
+              Windows beta builds are unsigned while the app is still being
+              tested.
             </div>
             <div className="modeActions">
               <a
@@ -1507,6 +1509,18 @@ function App() {
                 }
               >
                 Download Mac Beta
+              </a>
+              <a
+                className="installButton"
+                href={windowsAppDownloadUrl}
+                onClick={() =>
+                  void trackEvent("app_download_clicked", {
+                    platform: "windows",
+                    action: "download_exe",
+                  })
+                }
+              >
+                Download Windows Beta
               </a>
               <button
                 className="installButton"
@@ -1690,6 +1704,25 @@ function App() {
                   </div>
                 </div>
                 <div className="helpSection">
+                  <div className="installStepTitle">Windows beta download</div>
+                  <div className="installSteps">
+                    <a
+                      className="installLink"
+                      href={windowsAppDownloadUrl}
+                      onClick={() =>
+                        void trackEvent("app_download_clicked", {
+                          platform: "windows",
+                          action: "download_exe_help",
+                        })
+                      }
+                    >
+                      Download EXE
+                    </a>
+                    . Unsigned Windows builds may show SmartScreen or publisher
+                    warnings until code signing is added.
+                  </div>
+                </div>
+                <div className="helpSection">
                   <div className="installStepTitle">Desktop app</div>
                   <div className="installSteps">
                     The desktop app is the durable version for background
@@ -1698,7 +1731,7 @@ function App() {
                   </div>
                 </div>
                 <div className="helpSection helpSection--wide">
-                  <div className="installStepTitle">Current beta setup scripts</div>
+                  <div className="installStepTitle">Advanced setup scripts</div>
                   <div className="installSteps">
                     <a
                       className="installLink"
@@ -1712,7 +1745,7 @@ function App() {
                         })
                       }
                     >
-                      View macOS setup script
+                      View macOS watcher script
                     </a>{" "}
                     •{" "}
                     <a
@@ -1727,19 +1760,11 @@ function App() {
                         })
                       }
                     >
-                      View Windows setup script
+                      View Windows watcher script
                     </a>{" "}
-                    — beta scripts that clone the public{" "}
-                    <a
-                      className="installLink"
-                      href="https://github.com/jz-42/Minecraft-Speedrun-Notifier-BETA"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      git repo
-                    </a>{" "}
-                    and run the watcher. Downloaded scripts can trigger
-                    operating system warnings until the packaged app is released.
+                    — fallback scripts that clone the public runAlert repo and
+                    run the watcher directly. Keep these for advanced testing if
+                    the packaged app path is not enough.
                   </div>
                   <div className="installCommandRow">
                     <button

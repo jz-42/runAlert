@@ -15,6 +15,7 @@
     "electron:dev": "concurrently -k -n dashboard,electron \"VITE_API_BASE=http://127.0.0.1:18787 npm --prefix dashboard run dev -- --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache RUNALERT_ELECTRON_DEV=1 RUNALERT_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
     "electron:build": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --dir",
     "electron:pack:mac": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --mac dmg zip",
+    "electron:pack:win": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --win nsis",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:backend": "vitest run",

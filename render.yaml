@@ -20,3 +20,5 @@ services:
         sync: false
       - key: RUNALERT_MAC_ZIP_URL
         sync: false
+      - key: RUNALERT_WINDOWS_EXE_URL
+        sync: false

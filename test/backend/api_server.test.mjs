@@ -314,7 +314,7 @@ describe("api/server", () => {
   it("GET /download/macos/dmg redirects to configured release asset URL", async () => {
     const prev = process.env.RUNALERT_MAC_DMG_URL;
     process.env.RUNALERT_MAC_DMG_URL =
-      "https://github.com/jz-42/Minecraft-Speedrun-Notifier-DEV/releases/download/v0.1.0-beta.2/runAlert-0.1.0-beta.2-arm64.dmg";
+      "https://github.com/jz-42/runAlert/releases/download/v0.1.0-beta.2/runAlert-0.1.0-beta.2-arm64.dmg";
     const app = createApp({
       configPath,
       configDir,
@@ -330,6 +330,90 @@ describe("api/server", () => {
     expect(r.headers.location).toBe(process.env.RUNALERT_MAC_DMG_URL);
     if (prev == null) delete process.env.RUNALERT_MAC_DMG_URL;
     else process.env.RUNALERT_MAC_DMG_URL = prev;
+  });
+
+  it("GET /download/windows/exe redirects to configured release asset URL", async () => {
+    const prev = process.env.RUNALERT_WINDOWS_EXE_URL;
+    process.env.RUNALERT_WINDOWS_EXE_URL =
+      "https://github.com/jz-42/runAlert/releases/download/v0.1.0-beta.2/runAlert-Setup-0.1.0-beta.2.exe";
+    const app = createApp({
+      configPath,
+      configDir,
+      notifySend: vi.fn(async () => {}),
+      paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
+    });
+
+    const r = await withLocalServer(app, (req) =>
+      req.get("/download/windows/exe")
+    );
+
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toBe(process.env.RUNALERT_WINDOWS_EXE_URL);
+    if (prev == null) delete process.env.RUNALERT_WINDOWS_EXE_URL;
+    else process.env.RUNALERT_WINDOWS_EXE_URL = prev;
+  });
+
+  it("GET /twitch/status resolves Paceman name to Twitch handle before checking live state", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn(async (url, options = {}) => {
+      const u = String(url);
+      if (u.startsWith("https://id.twitch.tv/oauth2/token")) {
+        return {
+          ok: true,
+          json: async () => ({
+            access_token: "test-token",
+            expires_in: 3600,
+          }),
+        };
+      }
+      if (u.startsWith("https://api.twitch.tv/helix/streams?user_login=")) {
+        expect(u).toContain("user_login=Jay12310");
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{ id: "stream-1" }],
+          }),
+        };
+      }
+      throw new Error(`Unexpected fetch: ${u}`);
+    });
+
+    const prevClientId = process.env.TWITCH_CLIENT_ID;
+    const prevClientSecret = process.env.TWITCH_CLIENT_SECRET;
+    process.env.TWITCH_CLIENT_ID = "client-id";
+    process.env.TWITCH_CLIENT_SECRET = "client-secret";
+
+    const paceman = {
+      getRecentRunId: vi.fn(async (name) => (name === "BadGamer" ? 123 : null)),
+      getWorld: vi.fn(async (runId) =>
+        runId === 123
+          ? { data: { twitch: "Jay12310" } }
+          : { data: {} }
+      ),
+    };
+
+    const app = createApp({
+      configPath,
+      configDir,
+      notifySend: vi.fn(async () => {}),
+      paceman,
+    });
+
+    const r = await withLocalServer(app, (req) =>
+      req.get("/twitch/status?names=BadGamer")
+    );
+
+    expect(r.status).toBe(200);
+    expect(r.body?.statuses?.BadGamer).toMatchObject({
+      isTwitchLive: true,
+      twitch: "Jay12310",
+    });
+
+    global.fetch = originalFetch;
+    if (prevClientId == null) delete process.env.TWITCH_CLIENT_ID;
+    else process.env.TWITCH_CLIENT_ID = prevClientId;
+    if (prevClientSecret == null) delete process.env.TWITCH_CLIENT_SECRET;
+    else process.env.TWITCH_CLIENT_SECRET = prevClientSecret;
   });
 
   // Test: GET /status returns per-streamer isLive based on paceman world.isLive

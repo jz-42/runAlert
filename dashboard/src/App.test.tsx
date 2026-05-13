@@ -131,6 +131,9 @@ describe("App", () => {
       screen.getByRole("link", { name: "Download Mac Beta" }).getAttribute("href")
     ).toBe("/download/macos/dmg");
     expect(
+      screen.getByRole("link", { name: "Download Windows Beta" }).getAttribute("href")
+    ).toBe("/download/windows/exe");
+    expect(
       screen.getByRole("button", { name: "How runAlert works" })
     ).toBeTruthy();
     expect(
