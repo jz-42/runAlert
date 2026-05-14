@@ -105,7 +105,7 @@
 .frame{
   max-width: 1280px;
   margin: 0 auto;
-  padding: clamp(24px, 3.5vw, 40px) clamp(20px, 4vw, 52px) 72px;
+  padding: clamp(12px, 1.5vw, 20px) clamp(20px, 4vw, 52px) 72px;
   position: relative;
   z-index: 1;
 }
@@ -165,21 +165,23 @@ h1{
   font-size: 9px;
   font-weight: 500;
   opacity: 0.65;
+  text-transform: none;
 }
 
 .brandRow{
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 0;
 }
 
 .brandArtSlot{
   position: relative;
-  width: clamp(120px, 12vw, 180px);
+  width: clamp(80px, 7vw, 110px);
+  height: clamp(50px, 4.5vw, 70px);
   flex: 0 0 auto;
-  aspect-ratio: 1 / 1;
   overflow: visible;
+  margin-right: -4px;
 }
 
 .brandText{
@@ -196,9 +198,9 @@ h1{
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -46%);
-  width: 180%;
-  height: 180%;
+  transform: translate(-50%, -58%);
+  width: 260%;
+  height: 260%;
   background-image: url("/title-art.png");
   background-repeat: no-repeat;
   background-size: contain;
@@ -241,9 +243,10 @@ h1{
 .utilityRow{
   margin-top: 16px;
   display: flex;
-  justify-content: center;
   gap: 10px;
   flex-wrap: wrap;
+  align-self: stretch;
+  justify-content: flex-start;
 }
 
 .utilityCard{
@@ -326,6 +329,18 @@ h1{
   border-color: rgba(255, 110, 110, 0.16);
   color: rgba(255, 140, 140, 0.84);
   background: rgba(255, 110, 110, 0.08);
+}
+
+.utilityIconBtn.moon-on{
+  border-color: rgba(100, 140, 220, 0.25);
+  color: rgba(120, 160, 235, 0.85);
+  background: rgba(100, 140, 220, 0.10);
+}
+
+.utilityIconBtn.moon-off{
+  border-color: var(--border);
+  color: rgba(155, 161, 176, 0.50);
+  background: rgba(255,255,255,0.03);
 }
 
 .utilityIconBtn:hover{

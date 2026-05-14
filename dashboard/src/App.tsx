@@ -1273,7 +1273,7 @@ function App() {
                         <div className="utilityActions">
                           <button
                             type="button"
-                            className={`utilityIconBtn ${quietHoursSummary !== "None" ? "on" : "off"}`}
+                            className={`utilityIconBtn ${quietHoursSummary !== "None" ? "moon-on" : "moon-off"}`}
                             aria-label="Edit quiet hours"
                             onClick={openQuietHoursEditor}
                           >
@@ -1381,7 +1381,7 @@ function App() {
                         <div className="utilityActions">
                           <button
                             type="button"
-                            className={`utilityIconBtn ${quietHoursSummary !== "None" ? "on" : "off"}`}
+                            className={`utilityIconBtn ${quietHoursSummary !== "None" ? "moon-on" : "moon-off"}`}
                             aria-label="Edit quiet hours"
                             onClick={openQuietHoursEditor}
                           >
