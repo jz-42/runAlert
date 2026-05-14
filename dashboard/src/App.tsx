@@ -135,6 +135,12 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
   ],
 };
 
+const SPECIAL_STREAMER_AVATARS: Record<string, string> = {
+  stableronaldo: "/special-streamers/stableronaldo.png",
+  forsen: "/special-streamers/forsen.png",
+  ohnepixel: "/special-streamers/ohnepixel.png",
+};
+
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
@@ -374,6 +380,14 @@ function App() {
     const handle = String(name || "").trim();
     if (!handle) return null;
     return `https://paceman.gg/stats/player/${encodeURIComponent(handle)}/runs/`;
+  }
+
+  function getAvatarSrc(name: string): string | null {
+    const normalized = String(name || "").trim().toLowerCase();
+    if (normalized && SPECIAL_STREAMER_AVATARS[normalized]) {
+      return SPECIAL_STREAMER_AVATARS[normalized];
+    }
+    return profileByName[name]?.avatarUrl ?? null;
   }
 
   function isStreamerLive(name: string): boolean {
@@ -1677,11 +1691,11 @@ function App() {
           {streamers.map((name) => (
             <div className="avatarTile" key={name}>
               <button className="avatarBtn" onClick={() => setSelected(name)}>
-                {profileByName[name]?.avatarUrl ? (
+                {getAvatarSrc(name) ? (
                   <img
                     className="avatarImg"
                     alt={`${name} avatar`}
-                    src={profileByName[name].avatarUrl!}
+                    src={getAvatarSrc(name)!}
                     loading="lazy"
                   />
                 ) : null}

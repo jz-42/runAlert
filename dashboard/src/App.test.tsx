@@ -1681,7 +1681,7 @@ describe("App", () => {
     vi.spyOn(window, "prompt").mockReturnValue(null);
 
     const cfg: any = {
-      streamers: ["xQcOW", "forsen"],
+      streamers: ["xQcOW", "forsen", "ohnePixel", "STABLERONALDO"],
       clock: "IGT",
       quietHours: "00:30-07:15",
       defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
@@ -1705,7 +1705,9 @@ describe("App", () => {
             ok: true,
             profiles: {
               xQcOW: { avatarUrl: "https://example.com/xqc.png" },
-              forsen: { avatarUrl: null },
+              forsen: { avatarUrl: "https://example.com/forsen-real.png" },
+              ohnePixel: { avatarUrl: "https://example.com/ohne-real.png" },
+              STABLERONALDO: { avatarUrl: "https://example.com/stable-real.png" },
             },
           }),
         };
@@ -1734,6 +1736,18 @@ describe("App", () => {
                 runIsActive: false,
                 lastMilestone: "nether",
               },
+              ohnePixel: {
+                runId: 3,
+                isLive: false,
+                isActive: false,
+                runIsActive: false,
+              },
+              STABLERONALDO: {
+                runId: 4,
+                isLive: false,
+                isActive: false,
+                runIsActive: false,
+              },
             },
           }),
         };
@@ -1747,10 +1761,27 @@ describe("App", () => {
 
     await screen.findByText("xQcOW");
     await screen.findByText("forsen");
+    await screen.findByText("ohnePixel");
+    await screen.findByText("STABLERONALDO");
 
     const xAvatar = await screen.findByAltText("xQcOW avatar");
     expect((xAvatar as HTMLImageElement).src).toContain(
       "https://example.com/xqc.png"
+    );
+
+    const forsenAvatar = await screen.findByAltText("forsen avatar");
+    expect((forsenAvatar as HTMLImageElement).src).toContain(
+      "/special-streamers/forsen.png"
+    );
+
+    const ohneAvatar = await screen.findByAltText("ohnePixel avatar");
+    expect((ohneAvatar as HTMLImageElement).src).toContain(
+      "/special-streamers/ohnepixel.png"
+    );
+
+    const stableAvatar = await screen.findByAltText("STABLERONALDO avatar");
+    expect((stableAvatar as HTMLImageElement).src).toContain(
+      "/special-streamers/stableronaldo.png"
     );
 
     const xBadge = await screen.findByLabelText("xQcOW-milestone");
