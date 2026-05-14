@@ -51,7 +51,5 @@ button:hover {
 }
 button:focus,
 button:focus-visible {
-  /* Keep global focus ring in the same violet family as the app theme. */
-  outline: 3px solid rgba(168, 85, 247, 0.32);
-  outline-offset: 3px;
+  outline: none;
 }
