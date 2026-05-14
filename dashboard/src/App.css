@@ -187,11 +187,11 @@ a.tag:hover{
 
 .brandArtSlot{
   position: relative;
-  width: clamp(90px, 8vw, 120px);
+  width: clamp(110px, 10vw, 150px);
   height: clamp(70px, 7vw, 100px);
   flex: 0 0 auto;
   overflow: visible;
-  margin-right: -8px;
+  margin-right: 4px;
 }
 
 .brandText{
@@ -208,9 +208,9 @@ a.tag:hover{
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -52%);
-  width: 300%;
-  height: 300%;
+  transform: translate(-50%, -50%);
+  width: 200%;
+  height: 200%;
   background-image: url("/title-art.png");
   background-repeat: no-repeat;
   background-size: contain;
