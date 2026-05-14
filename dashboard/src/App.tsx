@@ -48,7 +48,7 @@ function splitMMSS(thresholdSec?: number): { mm: string; ss: string } {
   return { mm: String(mm), ss: String(ss).padStart(2, "0") };
 }
 
-const APP_VERSION = "0.1";
+const APP_VERSION = "0.2";
 const APP_CHANNEL = "Beta";
 const MAX_STREAMERS = 15;
 const MAX_QUIET_SPANS = 3;
@@ -1194,16 +1194,11 @@ function App() {
                   <h1 className="appTitle" data-testid="header-title">
                     Minecraft Speedrun Notifier
                   </h1>
-                  <span className="tag">
-                    {APP_CHANNEL}
-                  </span>
-                </div>
-                <div className="metaRow" data-testid="header-meta">
-                  <span className="metaVersion">v{APP_VERSION}</span>
-                </div>
-                <div className="betaDisclaimer">
-              Beta preview: possible bugs. Settings are saved{" "}
-              {desktopApp ? "on this device." : "per browser."}
+                  <div className="metaRow" data-testid="header-meta">
+                    <span className="metaVersion">v{APP_VERSION}</span>
+                    <span className="tag">{APP_CHANNEL}</span>
+                    <span className="metaWarn">⚠ Possible bugs</span>
+                  </div>
                 </div>
                 <div className="utilityRow" data-testid="header-utilityRow">
                   {desktopApp ? (

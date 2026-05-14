@@ -148,115 +148,108 @@ h1{
 .titleLine{
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
-.titleLine > .tag{
-  position: relative;
-  top: -2px;
+.tag{
+  display: inline-flex;
+  align-items: center;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  min-height: 22px;
-  padding: 0 8px;
+  min-height: 18px;
+  padding: 1px 6px;
   border: 1px solid rgba(212, 172, 96, 0.25);
   background: rgba(212, 172, 96, 0.10);
   color: rgba(212, 172, 96, 0.90);
+  border-radius: 4px;
+  line-height: 1;
 }
 
 .brandRow{
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  --brandSlotW: clamp(180px, 13vw, 240px);
-  --brandDragonW: clamp(360px, 26vw, 480px);
-  --brandDragonH: clamp(280px, 21vw, 360px);
-  --brandDragonBleedLeftMax: -32px;
+  align-items: center;
+  gap: 0;
 }
 
 .brandArtSlot{
   position: relative;
-  width: var(--brandSlotW);
-  height: 0;
-  overflow: visible;
+  width: clamp(100px, 10vw, 160px);
   flex: 0 0 auto;
+  aspect-ratio: 1 / 1;
+  overflow: visible;
 }
 
 .brandText{
-  display: grid;
-  gap: 6px;
-  justify-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
   text-align: left;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
 .titleDragon{
   position: absolute;
-  left: max(
-    calc((var(--brandSlotW) - var(--brandDragonW)) / 2),
-    var(--brandDragonBleedLeftMax)
-  );
-  top: -80px;
-  width: var(--brandDragonW);
-  height: var(--brandDragonH);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 180%;
+  height: 180%;
   background-image: url("/title-art.png");
   background-repeat: no-repeat;
   background-size: contain;
-  background-position: left center;
-  opacity: 1;
+  background-position: center;
   filter:
     brightness(1.08)
     contrast(1.02)
-    drop-shadow(0 16px 24px rgba(0,0,0,0.38));
+    drop-shadow(0 12px 20px rgba(0,0,0,0.38));
   pointer-events: none;
 }
 
 @media (max-width: 900px){
-  .titleDragon{ display:none; }
-  .brandRow{
-    flex-direction: column;
-    gap: 8px;
-  }
-  .brandArtSlot{ display:none; }
+  .titleDragon{ display: none; }
+  .brandArtSlot{ display: none; }
 }
 
 .metaRow{
-  margin-top: 6px;
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-start;
+  position: relative;
+  top: -2px;
 }
 
 .metaVersion{
-  color: rgba(155, 161, 176, 0.40);
+  color: var(--muted);
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
-.betaDisclaimer{
-  margin-top: 4px;
-  color: rgba(155, 161, 176, 0.48);
+.metaWarn{
+  color: rgba(255, 190, 100, 0.72);
   font-size: 11px;
+  font-weight: 500;
   letter-spacing: 0.01em;
 }
 
 /* ── Pills / Tags ────────────────────────────────────────── */
 
 .utilityRow{
-  margin-top: 12px;
-  display: grid;
+  margin-top: 16px;
+  display: flex;
   gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  flex-wrap: wrap;
 }
 
 .utilityCard{
-  min-width: 0;
+  min-width: 150px;
+  max-width: 240px;
+  flex: 0 1 auto;
   display: flex;
   align-items: stretch;
   gap: 8px;
@@ -283,8 +276,8 @@ h1{
 }
 
 .utilityMain:focus-visible{
-  outline: 2px solid var(--focusRing);
-  outline-offset: 3px;
+  outline: none;
+  border-color: rgba(255,255,255,0.18);
 }
 
 .utilityEyebrow{
@@ -434,8 +427,8 @@ h1{
 }
 
 .iconBtn:focus-visible{
-  outline: 2px solid var(--focusRing);
-  outline-offset: 3px;
+  outline: none;
+  border-color: rgba(255,255,255,0.18);
 }
 
 .iconSvg{
@@ -558,8 +551,8 @@ h1{
 }
 
 .avatarBtn:focus-visible{
-  outline: 2px solid var(--focusRing);
-  outline-offset: 5px;
+  outline: none;
+  border-color: rgba(255,255,255,0.18);
 }
 
 .avatarBtn.add{
