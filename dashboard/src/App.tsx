@@ -77,7 +77,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       title: "Download the beta build",
       body:
         "runAlert is a large unsigned beta app right now. The source is public on GitHub, but macOS will still show a security warning until signing and notarization are added.",
-      imageSrc: "/install/step-1-open-download.png",
+      imageSrc: "/install-guide/step-1-open-download.png",
       imageAlt: "Downloaded runAlert disk image in the macOS dock",
     },
     {
@@ -85,7 +85,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       title: "Drag runAlert into Applications",
       body:
         "Open the DMG, then drag runAlert into the Applications folder. The extra runAlert volume you see in Finder is just the mounted disk image.",
-      imageSrc: "/install/step-2-drag-to-applications.png",
+      imageSrc: "/install-guide/step-2-drag-to-applications.png",
       imageAlt: "runAlert disk image showing the app being dragged into Applications",
     },
     {
@@ -93,7 +93,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       title: "Ignore the first security warning",
       body:
         "The first launch may show Apple's malware verification warning. That is expected for this unsigned beta build.",
-      imageSrc: "/install/step-3-gatekeeper-warning.png",
+      imageSrc: "/install-guide/step-3-gatekeeper-warning.png",
       imageAlt: "macOS gatekeeper warning shown when first opening runAlert",
     },
     {
@@ -101,7 +101,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       title: "Use Open Anyway in Privacy & Security",
       body:
         "Open macOS Settings, go to Privacy & Security, then click Open Anyway for runAlert. After that, launch the app again.",
-      imageSrc: "/install/step-4-open-anyway.png",
+      imageSrc: "/install-guide/step-4-open-anyway.png",
       imageAlt: "macOS Privacy & Security page showing the Open Anyway button for runAlert",
     },
     {
@@ -109,7 +109,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       title: "Enable notifications in macOS",
       body:
         "For reliable alerts, turn on notifications for runAlert and choose the banner, sound, lock screen, and grouping behavior you want in macOS settings.",
-      imageSrc: "/install/step-5-notification-settings.png",
+      imageSrc: "/install-guide/step-5-notification-settings.png",
       imageAlt: "macOS notification settings for runAlert",
     },
   ],
@@ -2286,7 +2286,7 @@ function App() {
                     </div>
                     <img
                       className="notifPreviewShot"
-                      src="/install/step-5-notification-settings.png"
+                      src="/install-guide/step-5-notification-settings.png"
                       alt="macOS notification settings for runAlert"
                       loading="lazy"
                     />
