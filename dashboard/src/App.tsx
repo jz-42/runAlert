@@ -1195,8 +1195,8 @@ function App() {
                     Minecraft Speedrun Notifier
                   </h1>
                   <div className="metaRow" data-testid="header-meta">
-                    <span className="metaVersion">v{APP_VERSION}</span>
                     <span className="tag">{APP_CHANNEL}</span>
+                    <span className="metaVersion">v{APP_VERSION}</span>
                     <span className="metaWarn">⚠ Possible bugs</span>
                   </div>
                 </div>
