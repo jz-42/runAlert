@@ -316,6 +316,9 @@ function App() {
     Record<string, { avatarUrl: string | null; twitch?: string | null }>
   >({});
 
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratingDraftRef = useRef(false);
   const queuedSaveRef = useRef(false);
@@ -967,6 +970,17 @@ function App() {
   }, [draft, selected]);
 
   const streamers: string[] = cfg?.streamers ?? [];
+
+  const reorderStreamers = (fromIdx: number, toIdx: number) => {
+    if (!cfg || fromIdx === toIdx) return;
+    const next = [...(cfg.streamers ?? [])];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    const updated = { ...cfg, streamers: next };
+    setCfg(updated);
+    void putConfig(updated).catch((e) => setErr(e?.message ?? String(e)));
+  };
+
   const quietHoursSummary = formatQuietHoursSummary(cfg?.quietHours);
   const desktopNotificationsSummary = notificationsEnabled
     ? `On · Sound ${notificationSoundEnabled ? "on" : "off"}`
@@ -1249,6 +1263,7 @@ function App() {
                               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
                             )}
                           </button>
+                          {notificationsEnabled ? (
                           <button
                             type="button"
                             className={`utilityIconBtn ${
@@ -1264,11 +1279,12 @@ function App() {
                             }
                           >
                             {notificationSoundEnabled ? (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
                             ) : (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
                             )}
                           </button>
+                          ) : null}
                         </div>
                       </div>
 
@@ -1357,6 +1373,7 @@ function App() {
                               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
                             )}
                           </button>
+                          {browserAlertsEnabled ? (
                           <button
                             type="button"
                             className={`utilityIconBtn ${
@@ -1372,11 +1389,12 @@ function App() {
                             }
                           >
                             {notificationSoundEnabled ? (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
                             ) : (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
                             )}
                           </button>
+                          ) : null}
                         </div>
                       </div>
 
@@ -1722,8 +1740,22 @@ function App() {
         ) : null}
 
         <div className="grid">
-          {streamers.map((name) => (
-            <div className="avatarTile" key={name}>
+          {streamers.map((name, idx) => (
+            <div
+              className={`avatarTile${dragIdx === idx ? " dragging" : ""}${dragOverIdx === idx ? " dragOver" : ""}`}
+              key={name}
+              draggable
+              onDragStart={() => setDragIdx(idx)}
+              onDragOver={(e) => { e.preventDefault(); setDragOverIdx(idx); }}
+              onDragLeave={() => { if (dragOverIdx === idx) setDragOverIdx(null); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragIdx !== null) reorderStreamers(dragIdx, idx);
+                setDragIdx(null);
+                setDragOverIdx(null);
+              }}
+              onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+            >
               <button className="avatarBtn" onClick={() => setSelected(name)}>
                 {getAvatarSrc(name) ? (
                   <img
@@ -1785,6 +1817,8 @@ function App() {
             <div className="label">Add Streamer</div>
           </div>
         </div>
+
+        <div className="bottomSpacer" />
 
         {!desktopApp ? (
           <div className="downloadHub" aria-label="Desktop app downloads">
