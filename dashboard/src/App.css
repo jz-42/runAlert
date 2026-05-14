@@ -38,6 +38,8 @@
 
 .page{
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(160deg, var(--bg) 0%, var(--bg2) 100%);
   color: var(--text);
   position: relative;
@@ -103,7 +105,11 @@
 }
 
 .frame{
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
   padding: clamp(20px, 2.5vw, 32px) clamp(20px, 4vw, 52px) 72px;
   position: relative;
@@ -187,11 +193,11 @@ a.tag:hover{
 
 .brandArtSlot{
   position: relative;
-  width: clamp(110px, 10vw, 150px);
-  height: clamp(70px, 7vw, 100px);
+  width: clamp(130px, 12vw, 180px);
+  height: clamp(90px, 9vw, 130px);
   flex: 0 0 auto;
   overflow: visible;
-  margin-right: 4px;
+  margin-right: -8px;
 }
 
 .brandText{
@@ -208,9 +214,9 @@ a.tag:hover{
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
-  width: 200%;
-  height: 200%;
+  transform: translate(-52%, -48%);
+  width: 280%;
+  height: 280%;
   background-image: url("/title-art.png");
   background-repeat: no-repeat;
   background-size: contain;
@@ -313,12 +319,12 @@ a.tag:hover{
 .utilityActions{
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .utilityIconBtn{
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--r-pill);
   padding: 0;
   display: grid;
@@ -770,12 +776,17 @@ a.tag:hover{
 
 /* ── Download hub ────────────────────────────────────────── */
 
+.bottomSpacer{
+  flex: 1 1 auto;
+}
+
 .downloadHub{
-  margin: 72px auto 0;
+  margin: 24px auto 0;
   max-width: 760px;
-  display: grid;
-  gap: 14px;
-  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
   border-radius: var(--r-lg);
   border: 1px solid var(--border);
   background: rgba(15, 15, 22, 0.80);
@@ -783,23 +794,24 @@ a.tag:hover{
 }
 
 .downloadHubHeader{
-  display: grid;
-  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .downloadHubTitle{
   color: rgba(236, 239, 246, 0.92);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .downloadHubText{
   color: rgba(155, 161, 176, 0.72);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .downloadHubActions{
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   flex-wrap: wrap;

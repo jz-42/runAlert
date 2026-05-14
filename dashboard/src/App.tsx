@@ -1,7 +1,6 @@
 import "./App.css";
 
 import React, { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 import {
   API_BASE,
   getConfig,
@@ -315,6 +314,9 @@ function App() {
   const [profileByName, setProfileByName] = useState<
     Record<string, { avatarUrl: string | null; twitch?: string | null }>
   >({});
+
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratingDraftRef = useRef(false);
@@ -967,6 +969,17 @@ function App() {
   }, [draft, selected]);
 
   const streamers: string[] = cfg?.streamers ?? [];
+
+  const reorderStreamers = (fromIdx: number, toIdx: number) => {
+    if (!cfg || fromIdx === toIdx) return;
+    const next = [...(cfg.streamers ?? [])];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    const updated = { ...cfg, streamers: next };
+    setCfg(updated);
+    void putConfig(updated).catch((e) => setErr(e?.message ?? String(e)));
+  };
+
   const quietHoursSummary = formatQuietHoursSummary(cfg?.quietHours);
   const desktopNotificationsSummary = notificationsEnabled
     ? `On · Sound ${notificationSoundEnabled ? "on" : "off"}`
@@ -1249,6 +1262,7 @@ function App() {
                               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
                             )}
                           </button>
+                          {notificationsEnabled ? (
                           <button
                             type="button"
                             className={`utilityIconBtn ${
@@ -1264,11 +1278,12 @@ function App() {
                             }
                           >
                             {notificationSoundEnabled ? (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
                             ) : (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
                             )}
                           </button>
+                          ) : null}
                         </div>
                       </div>
 
@@ -1357,6 +1372,7 @@ function App() {
                               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
                             )}
                           </button>
+                          {browserAlertsEnabled ? (
                           <button
                             type="button"
                             className={`utilityIconBtn ${
@@ -1372,11 +1388,12 @@ function App() {
                             }
                           >
                             {notificationSoundEnabled ? (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
                             ) : (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
                             )}
                           </button>
+                          ) : null}
                         </div>
                       </div>
 
@@ -1413,7 +1430,7 @@ function App() {
                 </div>
               </div>
             {statusErr ? (
-              <div style={{ marginTop: 6, color: "#ffb86b", fontSize: 14 }}>
+              <div className="statusWarn">
                 {statusErr}
               </div>
             ) : null}
@@ -1438,29 +1455,15 @@ function App() {
         </div>
 
         {err ? (
-          <div style={{ color: "#ff6b6b", marginTop: 12 }}>{err}</div>
+          <div className="configError">{err}</div>
         ) : null}
         {!cfg ? (
-          <div style={{ marginTop: 12, color: "#999" }}>Loading config…</div>
+          <div className="loadingText">Loading config…</div>
         ) : null}
 
         {selected && cfg ? (
-          <div
-            style={{
-              marginTop: 18,
-              padding: 16,
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(255,255,255,0.04)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
+          <div className="milestonePanel">
+            <div className="milestonePanelHeader">
               <a
                 className={`label labelLink labelRow panelName ${
                   isStreamerLive(selected) ? "labelLive" : ""
@@ -1479,16 +1482,16 @@ function App() {
                   />
                 ) : null}
               </a>
-              <div style={{ display: "flex", gap: 10 }}>
+              <div className="milestonePanelActions">
                 <button
+                  className="modalBtn modalBtn--danger"
                   onClick={() => removeStreamer(selected)}
-                  style={{ height: 36, borderRadius: 10 }}
                 >
                   Remove
                 </button>
                 <button
+                  className="modalBtn"
                   onClick={() => setSelected(null)}
-                  style={{ height: 36, borderRadius: 10 }}
                 >
                   Close
                 </button>
@@ -1531,7 +1534,7 @@ function App() {
               </label>
             </div>
 
-            <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            <div className="milestoneGrid">
               {Object.entries(draft).map(([milestone, mcfg]) => {
                 const enabled = mcfg.enabled ?? true;
                 const value = mcfg.thresholdSec;
@@ -1545,19 +1548,12 @@ function App() {
                     className="milestoneRow"
                     style={{ opacity: enabled ? 1 : 0.55 }}
                   >
-                    <div style={{ fontSize: 18 }}>
+                    <div className="milestoneLabel">
                       {milestoneLabel(milestone)}
                     </div>
 
                     <div className="milestoneControls">
-                      <label
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          color: "#bdbdbd",
-                        }}
-                      >
+                      <label className="milestoneCheck">
                         <input
                           type="checkbox"
                           checked={enabled}
@@ -1681,20 +1677,13 @@ function App() {
               })}
             </div>
 
-            <div
-              style={{
-                marginTop: 12,
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 10,
-              }}
-            >
+            <div className="milestonePanelFooter">
               <button
                 onClick={() => {
                   if (!selected) return;
                   setDraft(getMilestonesForStreamer(selected)); // revert
                 }}
-                style={smallBtn}
+                className="modalBtn"
               >
                 Cancel
               </button>
@@ -1707,13 +1696,7 @@ function App() {
                   autosaveTimerRef.current = null;
                   await persistDraft("manual");
                 }}
-                style={{
-                  ...smallBtn,
-                  background: saving
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(120,255,120,0.12)",
-                  border: "1px solid rgba(120,255,120,0.25)",
-                }}
+                className={`modalBtn ${saving ? "" : "modalBtn--save"}`}
               >
                 {saving ? "Saving…" : "Save"}
               </button>
@@ -1722,8 +1705,22 @@ function App() {
         ) : null}
 
         <div className="grid">
-          {streamers.map((name) => (
-            <div className="avatarTile" key={name}>
+          {streamers.map((name, idx) => (
+            <div
+              className={`avatarTile${dragIdx === idx ? " dragging" : ""}${dragOverIdx === idx ? " dragOver" : ""}`}
+              key={name}
+              draggable
+              onDragStart={() => setDragIdx(idx)}
+              onDragOver={(e) => { e.preventDefault(); setDragOverIdx(idx); }}
+              onDragLeave={() => { if (dragOverIdx === idx) setDragOverIdx(null); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragIdx !== null) reorderStreamers(dragIdx, idx);
+                setDragIdx(null);
+                setDragOverIdx(null);
+              }}
+              onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+            >
               <button className="avatarBtn" onClick={() => setSelected(name)}>
                 {getAvatarSrc(name) ? (
                   <img
@@ -1785,6 +1782,8 @@ function App() {
             <div className="label">Add Streamer</div>
           </div>
         </div>
+
+        <div className="bottomSpacer" />
 
         {!desktopApp ? (
           <div className="downloadHub" aria-label="Desktop app downloads">
@@ -1860,9 +1859,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close onboarding"
-                  style={{ width: 46, height: 46 }}
                   onClick={dismissOnboarding}
                 >
                   <svg
@@ -1941,9 +1939,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close help"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => setShowInstallDetails(false)}
                 >
                   <svg
@@ -2195,43 +2192,19 @@ function App() {
 
         {showSettings ? (
           <div
+            className="settingsOverlay"
             onClick={() => setShowSettings(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.55)",
-              backdropFilter: "blur(6px)",
-              zIndex: 80,
-            }}
           >
             <div
+              className="settingsPanel"
               onClick={(e) => e.stopPropagation()}
-              style={{
-                position: "fixed",
-                right: 80,
-                top: 140,
-                width: 420,
-                padding: 26,
-                borderRadius: 18,
-                background: "var(--surfaceSolid)",
-                boxShadow: "0 16px 60px rgba(0,0,0,0.55)",
-                border: "1px solid var(--border)",
-                zIndex: 81,
-              }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div style={{ fontSize: 44, fontWeight: 700 }}>Settings</div>
+              <div className="settingsHeader">
+                <div className="settingsTitle">Settings</div>
                 <button
                   onClick={() => setShowSettings(false)}
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close settings"
-                  style={{ width: 46, height: 46 }}
                 >
                   <svg
                     className="iconSvg close"
@@ -2246,9 +2219,9 @@ function App() {
                 </button>
               </div>
 
-              <div style={{ marginTop: 18, display: "grid", gap: 14 }}>
+              <div className="settingsMenu">
                 <button
-                  style={settingsRowStyle}
+                  className="settingsMenuBtn"
                   onClick={() => {
                     setShowSettings(false);
                     setShowNotifications(true);
@@ -2257,7 +2230,7 @@ function App() {
                   Notifications
                 </button>
                 <button
-                  style={settingsRowStyle}
+                  className="settingsMenuBtn"
                   onClick={() => {
                     setShowSettings(false);
                     openQuietHoursEditor();
@@ -2266,7 +2239,7 @@ function App() {
                   Quiet Hours
                 </button>
                 <button
-                  style={settingsRowStyle}
+                  className="settingsMenuBtn"
                   onClick={() => {
                     setShowSettings(false);
                     setShowAgentSettings(true);
@@ -2301,9 +2274,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close notifications"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => setShowNotifications(false)}
                 >
                   <svg
@@ -2378,9 +2350,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close agent settings"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => setShowAgentSettings(false)}
                 >
                   <svg
@@ -2477,9 +2448,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close quiet hours"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => {
                     if (quietSaving) return;
                     setShowQuietHours(false);
@@ -2687,7 +2657,7 @@ function App() {
                   <div className="qhFooterRight">
                     <button
                       type="button"
-                      style={smallBtn}
+                      className="modalBtn"
                       disabled={quietSaving}
                       onClick={() => {
                         if (quietSaving) return;
@@ -2756,9 +2726,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close add streamer"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => {
                     setShowAddStreamer(false);
                     setAddStreamerErr(null);
@@ -2800,7 +2769,7 @@ function App() {
               <div className="promptActions">
                 <button
                   type="button"
-                  style={smallBtn}
+                  className="modalBtn"
                   onClick={() => {
                     setShowAddStreamer(false);
                     setAddStreamerErr(null);
@@ -2841,9 +2810,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close remove streamer"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => setPendingRemove(null)}
                 >
                   <svg
@@ -2862,7 +2830,7 @@ function App() {
               <div className="promptActions">
                 <button
                   type="button"
-                  style={smallBtn}
+                  className="modalBtn"
                   onClick={() => setPendingRemove(null)}
                 >
                   Cancel
@@ -2900,9 +2868,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close copy command"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => setShowCopyFallback(false)}
                 >
                   <svg
@@ -2925,7 +2892,7 @@ function App() {
               <div className="promptActions">
                 <button
                   type="button"
-                  style={smallBtn}
+                  className="modalBtn"
                   onClick={() => setShowCopyFallback(false)}
                 >
                   Close
@@ -2938,27 +2905,5 @@ function App() {
     </div>
   );
 }
-
-const settingsRowStyle: CSSProperties = {
-  height: 62,
-  borderRadius: 12,
-  border: "1px solid var(--borderStrong)",
-  background: "rgba(20, 18, 32, 0.52)",
-  color: "#ddd",
-  fontSize: 24,
-  textAlign: "left",
-  padding: "0 18px",
-  cursor: "pointer",
-};
-
-const smallBtn: CSSProperties = {
-  height: 40,
-  padding: "0 14px",
-  borderRadius: 10,
-  border: "1px solid var(--border)",
-  background: "rgba(20, 18, 32, 0.48)",
-  color: "#eaeaea",
-  cursor: "pointer",
-};
 
 export default App;
