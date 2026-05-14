@@ -61,6 +61,79 @@ const DESKTOP_BG_RUNNING_KEY = "runalert-desktop-background-running";
 type AmPm = "AM" | "PM";
 type Time12 = { hh: string; mm: string; ampm: AmPm };
 type QuietSpanDraft = { start: Time12; end: Time12 };
+type InstallGuidePlatform = "mac" | "windows";
+type InstallGuideStep = {
+  eyebrow: string;
+  title: string;
+  body: string;
+  imageSrc?: string;
+  imageAlt?: string;
+};
+
+const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
+  mac: [
+    {
+      eyebrow: "Step 1",
+      title: "Download the beta build",
+      body:
+        "runAlert is a large unsigned beta app right now. The source is public on GitHub, but macOS will still show a security warning until signing and notarization are added.",
+      imageSrc: "/install/step-1-open-download.png",
+      imageAlt: "Downloaded runAlert disk image in the macOS dock",
+    },
+    {
+      eyebrow: "Step 2",
+      title: "Drag runAlert into Applications",
+      body:
+        "Open the DMG, then drag runAlert into the Applications folder. The extra runAlert volume you see in Finder is just the mounted disk image.",
+      imageSrc: "/install/step-2-drag-to-applications.png",
+      imageAlt: "runAlert disk image showing the app being dragged into Applications",
+    },
+    {
+      eyebrow: "Step 3",
+      title: "Ignore the first security warning",
+      body:
+        "The first launch may show Apple's malware verification warning. That is expected for this unsigned beta build.",
+      imageSrc: "/install/step-3-gatekeeper-warning.png",
+      imageAlt: "macOS gatekeeper warning shown when first opening runAlert",
+    },
+    {
+      eyebrow: "Step 4",
+      title: "Use Open Anyway in Privacy & Security",
+      body:
+        "Open macOS Settings, go to Privacy & Security, then click Open Anyway for runAlert. After that, launch the app again.",
+      imageSrc: "/install/step-4-open-anyway.png",
+      imageAlt: "macOS Privacy & Security page showing the Open Anyway button for runAlert",
+    },
+    {
+      eyebrow: "Step 5",
+      title: "Enable notifications in macOS",
+      body:
+        "For reliable alerts, turn on notifications for runAlert and choose the banner, sound, lock screen, and grouping behavior you want in macOS settings.",
+      imageSrc: "/install/step-5-notification-settings.png",
+      imageAlt: "macOS notification settings for runAlert",
+    },
+  ],
+  windows: [
+    {
+      eyebrow: "Step 1",
+      title: "Download the Windows beta",
+      body:
+        "Use the packaged EXE build from runalert.app. This path is being prepared for the same packaged-flow model as Mac.",
+    },
+    {
+      eyebrow: "Step 2",
+      title: "Expect SmartScreen or publisher warnings",
+      body:
+        "Windows may warn that the beta is from an unknown publisher until signing is added. We will test and tighten this path on the Windows machine phase.",
+    },
+    {
+      eyebrow: "Step 3",
+      title: "Turn on notifications after install",
+      body:
+        "After install, confirm Windows notifications are enabled so runAlert can surface alerts reliably in the background.",
+    },
+  ],
+};
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -153,7 +226,7 @@ function formatQuietHoursSummary(q: Config["quietHours"]): string {
     if (!d) continue;
     parts.push(`${formatTime12(d.start)}–${formatTime12(d.end)}`);
   }
-  if (!parts.length) return "Set quiet hours";
+  if (!parts.length) return "None";
   return parts.join(", ");
 }
 
@@ -178,6 +251,9 @@ function App() {
     null
   );
   const [showInstallDetails, setShowInstallDetails] = useState(false);
+  const [installGuidePlatform, setInstallGuidePlatform] =
+    useState<InstallGuidePlatform>("mac");
+  const [installGuideStep, setInstallGuideStep] = useState(0);
   const [addStreamerName, setAddStreamerName] = useState("");
   const [addStreamerErr, setAddStreamerErr] = useState<string | null>(null);
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
@@ -363,6 +439,33 @@ function App() {
   function disableBrowserAlerts() {
     setBrowserAlertsErr(null);
     persistBrowserAlerts(false);
+  }
+
+  function updateNotificationPrefs({
+    enabled = notificationsEnabled,
+    sound = notificationSoundEnabled,
+  }: {
+    enabled?: boolean;
+    sound?: boolean;
+  }) {
+    if (!cfg) return;
+    const updated = structuredClone(cfg);
+    updated.notifications = {
+      ...(updated.notifications || {}),
+      enabled,
+      sound,
+    };
+    setCfg(updated);
+    setErr(null);
+    void putConfig(updated).catch((e) => setErr(e?.message ?? String(e)));
+  }
+
+  function toggleNotificationsEnabled(next: boolean) {
+    updateNotificationPrefs({ enabled: next });
+  }
+
+  function toggleNotificationSound(next: boolean) {
+    updateNotificationPrefs({ sound: next });
   }
 
   function dismissOnboarding() {
@@ -851,6 +954,21 @@ function App() {
 
   const streamers: string[] = cfg?.streamers ?? [];
   const quietHoursSummary = formatQuietHoursSummary(cfg?.quietHours);
+  const desktopNotificationsSummary = notificationsEnabled
+    ? `On · Sound ${notificationSoundEnabled ? "on" : "off"}`
+    : "Off";
+  const browserAlertsSummary = browserAlertsEnabled
+    ? `On · Sound ${notificationSoundEnabled ? "on" : "off"}`
+    : "Off";
+  const backgroundSummary = desktopApp
+    ? "Runs after window close"
+    : "Desktop app feature";
+  const installGuide = INSTALL_GUIDES[installGuidePlatform];
+  const activeInstallStep = installGuide[installGuideStep] ?? installGuide[0];
+  const guidePrimaryUrl =
+    installGuidePlatform === "mac" ? macAppDownloadUrl : windowsAppDownloadUrl;
+  const guidePrimaryLabel =
+    installGuidePlatform === "mac" ? "Download DMG" : "Download EXE";
 
   function getNetherCutoffSec(name: string): number | null {
     if (!cfg) return null;
@@ -893,6 +1011,16 @@ function App() {
     }
 
     return out;
+  }
+
+  function openInstallGuide(platform: InstallGuidePlatform) {
+    setInstallGuidePlatform(platform);
+    setInstallGuideStep(0);
+    setShowInstallDetails(true);
+    void trackEvent("help_opened", {
+      surface: "download-hub",
+      platform,
+    });
   }
 
   function milestoneBadgeText(milestone: string): string {
@@ -1072,23 +1200,160 @@ function App() {
                 </div>
                 <div className="metaRow" data-testid="header-meta">
                   <span className="metaVersion">v{APP_VERSION}</span>
-                  <button
-                    type="button"
-                    className="quietHoursPill"
-                    onClick={openQuietHoursEditor}
-                    aria-label="Edit quiet hours"
-                    data-testid="header-quietHours"
-                    title="During quiet hours, runAlert keeps monitoring but does not send notifications."
-                  >
-                    Quiet Hours: {quietHoursSummary}
-                  </button>
                 </div>
                 <div className="betaDisclaimer">
               Beta preview: possible bugs. Settings are saved{" "}
               {desktopApp ? "on this device." : "per browser."}
                 </div>
+                <div className="utilityRow" data-testid="header-utilityRow">
+                  {desktopApp ? (
+                    <>
+                      <div className="utilityCard" data-testid="header-notifications">
+                        <button
+                          type="button"
+                          className="utilityMain"
+                          onClick={() => setShowNotifications(true)}
+                          aria-label="Open notifications settings"
+                        >
+                          <span className="utilityEyebrow">Notifications</span>
+                          <span className="utilityValue">
+                            {desktopNotificationsSummary}
+                          </span>
+                        </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${
+                              notificationsEnabled ? "on" : "off"
+                            }`}
+                            aria-label={
+                              notificationsEnabled
+                                ? "Disable notifications"
+                                : "Enable notifications"
+                            }
+                            onClick={() =>
+                              toggleNotificationsEnabled(!notificationsEnabled)
+                            }
+                          >
+                            {notificationsEnabled ? "●" : "○"}
+                          </button>
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${
+                              notificationSoundEnabled ? "on" : "off"
+                            }`}
+                            aria-label={
+                              notificationSoundEnabled
+                                ? "Turn notification sound off"
+                                : "Turn notification sound on"
+                            }
+                            onClick={() =>
+                              toggleNotificationSound(!notificationSoundEnabled)
+                            }
+                          >
+                            {notificationSoundEnabled ? "🔊" : "🔇"}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="utilityCard">
+                        <button
+                          type="button"
+                          className="utilityMain"
+                          onClick={openQuietHoursEditor}
+                          aria-label="Edit quiet hours"
+                          data-testid="header-quietHours"
+                          title="During quiet hours, runAlert keeps monitoring but does not send notifications."
+                        >
+                          <span className="utilityEyebrow">Quiet Hours</span>
+                          <span className="utilityValue">{quietHoursSummary}</span>
+                        </button>
+                      </div>
+
+                      <div className="utilityCard" data-testid="header-background">
+                        <button
+                          type="button"
+                          className="utilityMain"
+                          onClick={() => setShowAgentSettings(true)}
+                          aria-label="Open background monitoring settings"
+                        >
+                          <span className="utilityEyebrow">Background</span>
+                          <span className="utilityValue">{backgroundSummary}</span>
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="utilityCard" data-testid="header-browserAlerts">
+                        <button
+                          type="button"
+                          className="utilityMain"
+                          onClick={() =>
+                            browserAlertsEnabled
+                              ? disableBrowserAlerts()
+                              : enableBrowserAlerts()
+                          }
+                          aria-label={
+                            browserAlertsEnabled
+                              ? "Disable browser alerts"
+                              : "Enable browser alerts"
+                          }
+                        >
+                          <span className="utilityEyebrow">Browser Alerts</span>
+                          <span className="utilityValue">
+                            {browserAlertsSummary}
+                          </span>
+                        </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${
+                              browserAlertsEnabled ? "on" : "off"
+                            }`}
+                            aria-label={
+                              browserAlertsEnabled
+                                ? "Disable browser alerts"
+                                : "Enable browser alerts"
+                            }
+                            onClick={() =>
+                              browserAlertsEnabled
+                                ? disableBrowserAlerts()
+                                : enableBrowserAlerts()
+                            }
+                          >
+                            {browserAlertsEnabled ? "●" : "○"}
+                          </button>
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${
+                              notificationSoundEnabled ? "on" : "off"
+                            }`}
+                            aria-label="Open notification preferences"
+                            onClick={() => setShowNotifications(true)}
+                          >
+                            {notificationSoundEnabled ? "🔊" : "🔇"}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="utilityCard">
+                        <button
+                          type="button"
+                          className="utilityMain"
+                          onClick={openQuietHoursEditor}
+                          aria-label="Edit quiet hours"
+                          data-testid="header-quietHours"
+                          title="During quiet hours, runAlert keeps monitoring but does not send notifications."
+                        >
+                          <span className="utilityEyebrow">Quiet Hours</span>
+                          <span className="utilityValue">{quietHoursSummary}</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                </div>
               </div>
-            </div>
             {statusErr ? (
               <div style={{ marginTop: 6, color: "#ffb86b", fontSize: 14 }}>
                 {statusErr}
@@ -1149,7 +1414,11 @@ function App() {
               >
                 <span>{selected}</span>
                 {isStreamerLive(selected) ? (
-                  <span className="liveDot on" aria-hidden="true" />
+                  <span
+                    className="liveDot on"
+                    aria-label="Live on Twitch"
+                    title="Live on Twitch"
+                  />
                 ) : null}
               </a>
               <div style={{ display: "flex", gap: 10 }}>
@@ -1427,7 +1696,11 @@ function App() {
               >
                 <span>{name}</span>
                 {isStreamerLive(name) ? (
-                  <span className="liveDot on" aria-hidden="true" />
+                  <span
+                    className="liveDot on"
+                    aria-label="Live on Twitch"
+                    title="Live on Twitch"
+                  />
                 ) : null}
               </a>
               <a
@@ -1455,88 +1728,49 @@ function App() {
           </div>
         </div>
 
-        <div className="modeStrip" aria-label="Alert modes">
-          <div className="modeCard">
-            <div className="modeHeader">
-              <span
-                className={`alertsDot ${browserAlertsEnabled ? "on" : "off"}`}
-                aria-hidden="true"
-              />
-              <span className="modeTitle">Browser alerts</span>
+        {!desktopApp ? (
+          <div className="downloadHub" aria-label="Desktop app downloads">
+            <div className="downloadHubHeader">
+              <div className="downloadHubTitle">Desktop app</div>
+              <div className="downloadHubText">
+                Durable background alerts after the window is closed. Current
+                Mac and Windows beta builds are unsigned while testing.
+              </div>
             </div>
-            <div className="modeText">
-              {browserAlertsEnabled
-                ? "On while this tab stays open."
-                : "Try alerts in this tab before downloading."}
-            </div>
-            <button
-              className="alertsToggleBtn"
-              type="button"
-              onClick={() =>
-                browserAlertsEnabled
-                  ? disableBrowserAlerts()
-                  : enableBrowserAlerts()
-              }
-            >
-              {browserAlertsEnabled
-                ? "Browser alerts enabled"
-                : "Enable browser alerts"}
-            </button>
-            {browserAlertsErr ? (
-              <div className="alertsError">{browserAlertsErr}</div>
-            ) : null}
-          </div>
-
-          <div className="modeCard modeCard--wide">
-            <div className="modeHeader">
-              <span className="modeDot desktop" aria-hidden="true" />
-              <span className="modeTitle">Desktop app</span>
-            </div>
-            <div className="modeText">
-              Background alerts after the app window is closed. Mac and
-              Windows beta builds are unsigned while the app is still being
-              tested.
-            </div>
-            <div className="modeActions">
-              <a
+            <div className="downloadHubActions">
+              <button
                 className="installButton installButton--primary"
-                href={macAppDownloadUrl}
-                onClick={() =>
-                  void trackEvent("app_download_clicked", {
-                    platform: "mac",
-                    action: "download_dmg",
-                  })
-                }
+                type="button"
+                onClick={() => {
+                  openInstallGuide("mac");
+                }}
               >
                 Download Mac Beta
-              </a>
-              <a
-                className="installButton"
-                href={windowsAppDownloadUrl}
-                onClick={() =>
-                  void trackEvent("app_download_clicked", {
-                    platform: "windows",
-                    action: "download_exe",
-                  })
-                }
+              </button>
+              <button
+                className="installButton installButton--primary"
+                type="button"
+                onClick={() => {
+                  openInstallGuide("windows");
+                }}
               >
                 Download Windows Beta
-              </a>
+              </button>
               <button
                 className="installButton"
                 type="button"
                 onClick={() => {
-                  void trackEvent("help_opened", {
-                    surface: "desktop-card",
-                  });
-                  setShowInstallDetails(true);
+                  openInstallGuide("mac");
                 }}
               >
-                How runAlert works
+                Install Help
               </button>
             </div>
+            {browserAlertsErr ? (
+              <div className="alertsError downloadHubError">{browserAlertsErr}</div>
+            ) : null}
           </div>
-        </div>
+        ) : null}
 
         <div className="creditRow">
           <span className="creditText">Powered by</span>{" "}
@@ -1633,14 +1867,18 @@ function App() {
               className="qhModal"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
-              aria-label="How runAlert works"
+              aria-label="Install help"
             >
               <div className="qhHeader">
                 <div>
-                  <div className="qhTitle">How runAlert works</div>
+                  <div className="qhTitle">
+                    {installGuidePlatform === "mac"
+                      ? "Install runAlert on Mac"
+                      : "Install runAlert on Windows"}
+                  </div>
                   <div className="qhHelp">
-                    Browser alerts are for trying runAlert. The desktop app is
-                    for background alerts after the window is closed.
+                    Browser alerts are for trying runAlert in this tab. The
+                    desktop app is the durable background-alert path.
                   </div>
                 </div>
                 <button
@@ -1663,171 +1901,235 @@ function App() {
                 </button>
               </div>
 
-              <div className="helpGrid">
-                <div className="helpSection">
-                  <div className="installStepTitle">Browser demo</div>
-                  <div className="installSteps">
-                    Enable browser alerts to test runAlert while this tab is
-                    open. Closing the tab or browser stops browser alerts.
+              <div className="installGuideShell">
+                <div className="installGuideTabs" role="tablist" aria-label="Install platform">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={installGuidePlatform === "mac"}
+                    className={`installGuideTab ${
+                      installGuidePlatform === "mac" ? "active" : ""
+                    }`}
+                    onClick={() => {
+                      setInstallGuidePlatform("mac");
+                      setInstallGuideStep(0);
+                    }}
+                  >
+                    Mac
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={installGuidePlatform === "windows"}
+                    className={`installGuideTab ${
+                      installGuidePlatform === "windows" ? "active" : ""
+                    }`}
+                    onClick={() => {
+                      setInstallGuidePlatform("windows");
+                      setInstallGuideStep(0);
+                    }}
+                  >
+                    Windows
+                  </button>
+                </div>
+
+                <div className="installGuideStepMeta">
+                  <span className="installGuideEyebrow">
+                    {activeInstallStep.eyebrow}
+                  </span>
+                  <span className="installGuideCounter">
+                    {installGuideStep + 1} / {installGuide.length}
+                  </span>
+                </div>
+
+                <div className="installGuidePanel">
+                  <div className="installGuideCopy">
+                    <div className="installGuideTitle">
+                      {activeInstallStep.title}
+                    </div>
+                    <div className="installGuideBody">
+                      {activeInstallStep.body}
+                    </div>
+
+                    {installGuideStep === 0 ? (
+                      <div className="installGuideActions">
+                        <a
+                          className="installButton installButton--primary"
+                          href={guidePrimaryUrl}
+                          onClick={() =>
+                            void trackEvent("app_download_clicked", {
+                              platform: installGuidePlatform,
+                              action:
+                                installGuidePlatform === "mac"
+                                  ? "download_dmg"
+                                  : "download_exe",
+                            })
+                          }
+                        >
+                          {guidePrimaryLabel}
+                        </a>
+                        {installGuidePlatform === "mac" ? (
+                          <a
+                            className="installButton"
+                            href={macAppZipUrl}
+                            onClick={() =>
+                              void trackEvent("app_download_clicked", {
+                                platform: "mac",
+                                action: "download_zip",
+                              })
+                            }
+                          >
+                            Download ZIP
+                          </a>
+                        ) : null}
+                        <a
+                          className="installLink"
+                          href="https://github.com/jz-42/runAlert"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View public source
+                        </a>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {activeInstallStep.imageSrc ? (
+                    <div className="installGuideShotFrame">
+                      <img
+                        className="installGuideShot"
+                        src={activeInstallStep.imageSrc}
+                        alt={activeInstallStep.imageAlt}
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="installGuideFooter">
+                  <button
+                    type="button"
+                    className="installButton"
+                    onClick={() =>
+                      setInstallGuideStep((step) => Math.max(0, step - 1))
+                    }
+                    disabled={installGuideStep === 0}
+                  >
+                    Back
+                  </button>
+                  <div className="installGuideFooterActions">
+                    {installGuideStep < installGuide.length - 1 ? (
+                      <button
+                        type="button"
+                        className="installButton installButton--primary"
+                        onClick={() =>
+                          setInstallGuideStep((step) =>
+                            Math.min(installGuide.length - 1, step + 1)
+                          )
+                        }
+                      >
+                        Next
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="installButton installButton--primary"
+                        onClick={() => setShowInstallDetails(false)}
+                      >
+                        Done
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="helpSection">
-                  <div className="installStepTitle">Mac beta download</div>
-                  <div className="installSteps">
-                    <a
-                      className="installLink"
-                      href={macAppDownloadUrl}
-                      onClick={() =>
-                        void trackEvent("app_download_clicked", {
-                          platform: "mac",
-                          action: "download_dmg_help",
-                        })
-                      }
-                    >
-                      Download DMG
-                    </a>{" "}
-                    •{" "}
-                    <a
-                      className="installLink"
-                      href={macAppZipUrl}
-                      onClick={() =>
-                        void trackEvent("app_download_clicked", {
-                          platform: "mac",
-                          action: "download_zip_help",
-                        })
-                      }
-                    >
-                      Download ZIP
-                    </a>
-                    . Unsigned builds may require right-click Open or Privacy &
-                    Security approval on macOS.
+
+                <details className="installGuideAdvanced">
+                  <summary>Advanced install tools</summary>
+                  <div className="installGuideAdvancedBody">
+                    <div className="installSteps">
+                      Fallback scripts clone the public runAlert repo and run
+                      the watcher directly. Keep them for advanced testing only.
+                    </div>
+                    <div className="installCommandRow">
+                      <button
+                        className="installCopy"
+                        type="button"
+                        onClick={() => {
+                          void trackEvent("app_download_clicked", {
+                            platform: "mac",
+                            action: "copy_command",
+                          });
+                          copyInstallCommand(macInstallCommand, "mac");
+                        }}
+                      >
+                        {installCopied === "mac"
+                          ? "Copied"
+                          : "Copy macOS command"}
+                      </button>
+                      <span className="installCommandHint">
+                        Bash installer (macOS)
+                      </span>
+                    </div>
+                    <div className="installCommand">{macInstallCommand}</div>
+                    <div className="installCommandRow">
+                      <button
+                        className="installCopy"
+                        type="button"
+                        onClick={() => {
+                          void trackEvent("app_download_clicked", {
+                            platform: "windows",
+                            action: "copy_command",
+                          });
+                          copyInstallCommand(windowsInstallCommand, "windows");
+                        }}
+                      >
+                        {installCopied === "windows"
+                          ? "Copied"
+                          : "Copy Windows command"}
+                      </button>
+                      <span className="installCommandHint">
+                        PowerShell installer (Windows)
+                      </span>
+                    </div>
+                    <div className="installCommand">{windowsInstallCommand}</div>
+                    <div className="installGuideAdvancedLinks">
+                      <a
+                        className="installLink"
+                        href={macViewInstallUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View macOS watcher script
+                      </a>
+                      <a
+                        className="installLink"
+                        href={windowsViewInstallUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View Windows watcher script
+                      </a>
+                    </div>
+                    <div className="installTestRow">
+                      <button
+                        className="installTest"
+                        type="button"
+                        onClick={sendTestNotification}
+                        disabled={testStatus === "sending"}
+                      >
+                        {testStatus === "sending"
+                          ? "Sending…"
+                          : "Send test notification"}
+                      </button>
+                      <span className="installTestHint">
+                        {testStatus === "success"
+                          ? "Sent! Check your desktop notifications."
+                          : testStatus === "error"
+                            ? "No agent detected yet."
+                            : "Use this after install to verify it works."}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="helpSection">
-                  <div className="installStepTitle">Windows beta download</div>
-                  <div className="installSteps">
-                    <a
-                      className="installLink"
-                      href={windowsAppDownloadUrl}
-                      onClick={() =>
-                        void trackEvent("app_download_clicked", {
-                          platform: "windows",
-                          action: "download_exe_help",
-                        })
-                      }
-                    >
-                      Download EXE
-                    </a>
-                    . Unsigned Windows builds may show SmartScreen or publisher
-                    warnings until code signing is added.
-                  </div>
-                </div>
-                <div className="helpSection">
-                  <div className="installStepTitle">Desktop app</div>
-                  <div className="installSteps">
-                    The desktop app is the durable version for background
-                    alerts after the app window is closed. Full app packaging is
-                    in beta.
-                  </div>
-                </div>
-                <div className="helpSection helpSection--wide">
-                  <div className="installStepTitle">Advanced setup scripts</div>
-                  <div className="installSteps">
-                    <a
-                      className="installLink"
-                      href={macViewInstallUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() =>
-                        void trackEvent("app_download_clicked", {
-                          platform: "mac",
-                          action: "view_script",
-                        })
-                      }
-                    >
-                      View macOS watcher script
-                    </a>{" "}
-                    •{" "}
-                    <a
-                      className="installLink"
-                      href={windowsViewInstallUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() =>
-                        void trackEvent("app_download_clicked", {
-                          platform: "windows",
-                          action: "view_script",
-                        })
-                      }
-                    >
-                      View Windows watcher script
-                    </a>{" "}
-                    — fallback scripts that clone the public runAlert repo and
-                    run the watcher directly. Keep these for advanced testing if
-                    the packaged app path is not enough.
-                  </div>
-                  <div className="installCommandRow">
-                    <button
-                      className="installCopy"
-                      type="button"
-                      onClick={() => {
-                        void trackEvent("app_download_clicked", {
-                          platform: "mac",
-                          action: "copy_command",
-                        });
-                        copyInstallCommand(macInstallCommand, "mac");
-                      }}
-                    >
-                      {installCopied === "mac"
-                        ? "Copied"
-                        : "Copy macOS command"}
-                    </button>
-                    <span className="installCommandHint">
-                      Bash installer (macOS)
-                    </span>
-                  </div>
-                  <div className="installCommand">{macInstallCommand}</div>
-                  <div className="installCommandRow">
-                    <button
-                      className="installCopy"
-                      type="button"
-                      onClick={() => {
-                        void trackEvent("app_download_clicked", {
-                          platform: "windows",
-                          action: "copy_command",
-                        });
-                        copyInstallCommand(windowsInstallCommand, "windows");
-                      }}
-                    >
-                      {installCopied === "windows"
-                        ? "Copied"
-                        : "Copy Windows command"}
-                    </button>
-                    <span className="installCommandHint">
-                      PowerShell installer (Windows)
-                    </span>
-                  </div>
-                  <div className="installCommand">{windowsInstallCommand}</div>
-                  <div className="installTestRow">
-                    <button
-                      className="installTest"
-                      type="button"
-                      onClick={sendTestNotification}
-                      disabled={testStatus === "sending"}
-                    >
-                      {testStatus === "sending"
-                        ? "Sending…"
-                        : "Send test notification"}
-                    </button>
-                    <span className="installTestHint">
-                      {testStatus === "success"
-                        ? "Sent! Check your desktop notifications."
-                        : testStatus === "error"
-                          ? "No agent detected yet."
-                          : "Use this after install to verify it works."}
-                    </span>
-                  </div>
-                </div>
+                </details>
               </div>
             </div>
           </div>
@@ -1891,15 +2193,6 @@ function App() {
                   style={settingsRowStyle}
                   onClick={() => {
                     setShowSettings(false);
-                    openQuietHoursEditor();
-                  }}
-                >
-                  Quiet Hours
-                </button>
-                <button
-                  style={settingsRowStyle}
-                  onClick={() => {
-                    setShowSettings(false);
                     setShowNotifications(true);
                   }}
                 >
@@ -1909,10 +2202,19 @@ function App() {
                   style={settingsRowStyle}
                   onClick={() => {
                     setShowSettings(false);
+                    openQuietHoursEditor();
+                  }}
+                >
+                  Quiet Hours
+                </button>
+                <button
+                  style={settingsRowStyle}
+                  onClick={() => {
+                    setShowSettings(false);
                     setShowAgentSettings(true);
                   }}
                 >
-                  Agent (Mac)
+                  Background Monitoring
                 </button>
               </div>
             </div>
@@ -1934,8 +2236,9 @@ function App() {
                 <div>
                   <div className="qhTitle">Notifications</div>
                   <div className="qhHelp">
-                    Control whether runAlert shows browser notifications and
-                    plays the alert sound.
+                    {desktopApp
+                      ? "Control whether runAlert sends alerts, plays sound, and works with macOS notification settings."
+                      : "Control whether runAlert shows browser alerts and plays the alert sound while this tab stays open."}
                   </div>
                 </div>
                 <button
@@ -1964,23 +2267,9 @@ function App() {
                   <input
                     type="checkbox"
                     checked={notificationsEnabled}
-                    onChange={(e) => {
-                      const next = e.target.checked;
-                      if (!cfg) return;
-                      const updated = structuredClone(cfg);
-                      updated.notifications = {
-                        ...(updated.notifications || {}),
-                        enabled: next,
-                        sound:
-                          updated.notifications?.sound ??
-                          notificationSoundEnabled,
-                      };
-                      setCfg(updated);
-                      setErr(null);
-                      void putConfig(updated).catch((e) =>
-                        setErr(e?.message ?? String(e))
-                      );
-                    }}
+                    onChange={(e) =>
+                      toggleNotificationsEnabled(e.target.checked)
+                    }
                   />
                 </label>
                 <label className="notifRow">
@@ -1989,25 +2278,25 @@ function App() {
                     type="checkbox"
                     checked={notificationSoundEnabled}
                     disabled={!notificationsEnabled}
-                    onChange={(e) => {
-                      const next = e.target.checked;
-                      if (!cfg) return;
-                      const updated = structuredClone(cfg);
-                      updated.notifications = {
-                        ...(updated.notifications || {}),
-                        enabled:
-                          updated.notifications?.enabled ??
-                          notificationsEnabled,
-                        sound: next,
-                      };
-                      setCfg(updated);
-                      setErr(null);
-                      void putConfig(updated).catch((e) =>
-                        setErr(e?.message ?? String(e))
-                      );
-                    }}
+                    onChange={(e) => toggleNotificationSound(e.target.checked)}
                   />
                 </label>
+                {desktopApp ? (
+                  <div className="notifSection">
+                    <div className="notifSectionTitle">macOS controls the rest</div>
+                    <div className="notifNote">
+                      Banner style, lock screen, notification center, badges,
+                      sound, previews, and grouping all live in macOS Settings
+                      → Notifications → runAlert.
+                    </div>
+                    <img
+                      className="notifPreviewShot"
+                      src="/install/step-5-notification-settings.png"
+                      alt="macOS notification settings for runAlert"
+                      loading="lazy"
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

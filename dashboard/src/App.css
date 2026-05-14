@@ -248,34 +248,95 @@ h1{
 
 /* ── Pills / Tags ────────────────────────────────────────── */
 
-.quietHoursPill{
-  min-height: 26px;
-  padding: 0 10px;
-  border-radius: var(--r-pill);
-  display: inline-flex;
-  align-items: center;
+.utilityRow{
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.utilityCard{
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
   border: 1px solid var(--border);
   background: rgba(255,255,255,0.03);
-  color: rgba(220, 224, 234, 0.55);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+  border-radius: var(--r-lg);
+  padding: 8px;
 }
 
-.quietHoursPill:hover{
-  border-color: rgba(212, 172, 96, 0.18);
-  background: rgba(255,255,255,0.05);
-  color: rgba(220, 224, 234, 0.80);
+.utilityMain{
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
-.quietHoursPill:focus-visible{
+.utilityMain:hover{
+  border-color: transparent;
+}
+
+.utilityMain:focus-visible{
   outline: 2px solid var(--focusRing);
   outline-offset: 3px;
 }
 
-.quietHoursPill:active{
-  transform: scale(0.98);
+.utilityEyebrow{
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(155, 161, 176, 0.72);
+}
+
+.utilityValue{
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(236, 239, 246, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.utilityActions{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.utilityIconBtn{
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-pill);
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: rgba(220, 224, 234, 0.72);
+  font-size: 12px;
+}
+
+.utilityIconBtn.on{
+  border-color: rgba(100, 215, 138, 0.22);
+  color: rgba(130, 226, 163, 0.98);
+  background: rgba(100, 215, 138, 0.10);
+}
+
+.utilityIconBtn.off{
+  border-color: rgba(255, 110, 110, 0.16);
+  color: rgba(255, 140, 140, 0.84);
+  background: rgba(255, 110, 110, 0.08);
+}
+
+.utilityIconBtn:hover{
+  border-color: rgba(255,255,255,0.18);
 }
 
 .appTitle{
@@ -689,95 +750,46 @@ h1{
   letter-spacing: 0;
 }
 
-/* ── Mode Strip (install cards) ──────────────────────────── */
+/* ── Download hub ────────────────────────────────────────── */
 
-.modeStrip{
+.downloadHub{
   margin: 48px auto 0;
+  max-width: 760px;
   display: grid;
-  grid-template-columns: minmax(240px, 0.75fr) minmax(320px, 1.25fr);
-  gap: 10px;
-  max-width: 900px;
-}
-
-.modeCard{
-  min-width: 0;
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  padding: 16px 18px;
+  gap: 14px;
+  padding: 18px 20px;
   border-radius: var(--r-lg);
   border: 1px solid var(--border);
   background: rgba(15, 15, 22, 0.80);
   box-shadow: 0 4px 16px rgba(0,0,0,0.20);
-  transition: border-color 180ms ease;
 }
 
-.modeCard:hover{
-  border-color: rgba(255,255,255,0.10);
+.downloadHubHeader{
+  display: grid;
+  gap: 6px;
 }
 
-.modeHeader{
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+.downloadHubTitle{
+  color: rgba(236, 239, 246, 0.92);
+  font-size: 16px;
+  font-weight: 700;
 }
 
-.modeTitle{
-  color: rgba(236, 239, 246, 0.85);
+.downloadHubText{
+  color: rgba(155, 161, 176, 0.72);
   font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.modeText{
-  color: rgba(155, 161, 176, 0.68);
-  font-size: 12px;
   line-height: 1.5;
 }
 
-.modeActions{
+.downloadHubActions{
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.modeDot{
-  width: 7px;
-  height: 7px;
-  border-radius: var(--r-pill);
-  flex: 0 0 auto;
-}
-
-.modeDot.desktop{
-  background: rgba(212, 172, 96, 0.75);
-  box-shadow: 0 0 6px rgba(212, 172, 96, 0.14);
-}
-
-.textButton{
-  height: 30px;
-  border-radius: var(--r-pill);
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.03);
-  color: rgba(220, 224, 234, 0.65);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
-}
-
-.textButton:hover{
-  border-color: rgba(212, 172, 96, 0.18);
-  color: rgba(236, 239, 246, 0.88);
-  background: rgba(255,255,255,0.05);
-}
-
-@media (max-width: 860px){
-  .modeStrip{
-    grid-template-columns: 1fr;
-  }
+.downloadHubError{
+  margin-top: -4px;
 }
 
 /* ── Install card (detail expand) ───────────────────────── */
@@ -1031,6 +1043,12 @@ h1{
   color: rgba(236, 239, 246, 0.92);
 }
 
+.installButton:disabled{
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
 .installButton--primary{
   border-color: rgba(212, 172, 96, 0.32);
   color: rgba(255, 238, 198, 0.92);
@@ -1046,6 +1064,136 @@ h1{
 .installHint{
   font-size: 11px;
   color: rgba(255,255,255,0.38);
+}
+
+.installGuideShell{
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.installGuideTabs{
+  display: inline-flex;
+  gap: 8px;
+}
+
+.installGuideTab{
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: rgba(220, 224, 234, 0.72);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.installGuideTab.active{
+  border-color: rgba(212, 172, 96, 0.32);
+  color: rgba(255, 238, 198, 0.94);
+  background: rgba(212, 172, 96, 0.12);
+}
+
+.installGuideStepMeta{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: rgba(155, 161, 176, 0.72);
+  font-size: 12px;
+}
+
+.installGuideEyebrow{
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.installGuideCounter{
+  font-variant-numeric: tabular-nums;
+}
+
+.installGuidePanel{
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.installGuideCopy{
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.installGuideTitle{
+  color: rgba(236, 239, 246, 0.92);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.installGuideBody{
+  color: rgba(205, 210, 222, 0.78);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.installGuideActions{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.installGuideShotFrame{
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.025);
+  padding: 10px;
+}
+
+.installGuideShot{
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: calc(var(--r-lg) - 6px);
+}
+
+.installGuideFooter{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.installGuideFooterActions{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.installGuideAdvanced{
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.installGuideAdvanced > summary{
+  cursor: pointer;
+  color: rgba(205, 210, 222, 0.82);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.installGuideAdvancedBody{
+  margin-top: 12px;
+}
+
+.installGuideAdvancedLinks{
+  margin-top: 12px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
 /* ── Footer ──────────────────────────────────────────────── */
@@ -1294,6 +1442,14 @@ h1{
   color: rgba(255,255,255,0.45);
 }
 
+.notifPreviewShot{
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+}
+
 /* ── Onboarding / Help grid ──────────────────────────────── */
 
 .onboardingGrid{
@@ -1339,6 +1495,19 @@ h1{
   .onboardingGrid,
   .helpGrid{
     grid-template-columns: 1fr;
+  }
+
+  .installGuidePanel{
+    grid-template-columns: 1fr;
+  }
+
+  .installGuideFooter{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .installGuideFooterActions{
+    justify-content: flex-end;
   }
 }
 
