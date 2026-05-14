@@ -1195,7 +1195,7 @@ function App() {
                     Minecraft Speedrun Notifier
                   </h1>
                   <div className="metaRow" data-testid="header-meta">
-                    <span className="tag">{APP_CHANNEL} v{APP_VERSION}</span>
+                    <span className="tag">{APP_CHANNEL} <span className="tagVersion">v{APP_VERSION}</span></span>
                     <span className="metaWarn">⚠ Possible bugs</span>
                   </div>
                 </div>
@@ -1270,6 +1270,20 @@ function App() {
                           <span className="utilityEyebrow">Quiet Hours</span>
                           <span className="utilityValue">{quietHoursSummary}</span>
                         </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${quietHoursSummary !== "None" ? "on" : "off"}`}
+                            aria-label="Edit quiet hours"
+                            onClick={openQuietHoursEditor}
+                          >
+                            {quietHoursSummary !== "None" ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            )}
+                          </button>
+                        </div>
                       </div>
 
                       <div className="utilityCard" data-testid="header-background">
@@ -1334,8 +1348,14 @@ function App() {
                             className={`utilityIconBtn ${
                               notificationSoundEnabled ? "on" : "off"
                             }`}
-                            aria-label="Open notification preferences"
-                            onClick={() => setShowNotifications(true)}
+                            aria-label={
+                              notificationSoundEnabled
+                                ? "Turn notification sound off"
+                                : "Turn notification sound on"
+                            }
+                            onClick={() =>
+                              toggleNotificationSound(!notificationSoundEnabled)
+                            }
                           >
                             {notificationSoundEnabled ? (
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
@@ -1358,6 +1378,20 @@ function App() {
                           <span className="utilityEyebrow">Quiet Hours</span>
                           <span className="utilityValue">{quietHoursSummary}</span>
                         </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${quietHoursSummary !== "None" ? "on" : "off"}`}
+                            aria-label="Edit quiet hours"
+                            onClick={openQuietHoursEditor}
+                          >
+                            {quietHoursSummary !== "None" ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}
@@ -1372,7 +1406,7 @@ function App() {
           </div>
 
           <button
-            className="iconBtn"
+            className="iconBtn settingsGear"
             aria-label="Open settings"
             onClick={() => setShowSettings(true)}
           >

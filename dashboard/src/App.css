@@ -115,31 +115,22 @@
 .titleRow{
   position: relative;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.titleRow::before{
-  display: none;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .titleLeft{
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  padding-right: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
   z-index: 1;
-}
-
-.titleLeft::before{
-  content: "";
-  display: none;
 }
 
 h1{
   margin: 0;
-  font-size: clamp(32px, 3.2vw, 46px);
+  font-size: clamp(28px, 3vw, 44px);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.08;
@@ -148,6 +139,7 @@ h1{
 .titleLine{
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -155,6 +147,7 @@ h1{
 .tag{
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -168,15 +161,22 @@ h1{
   line-height: 1;
 }
 
+.tagVersion{
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.65;
+}
+
 .brandRow{
   display: flex;
   align-items: center;
-  gap: 0;
+  justify-content: center;
+  gap: 4px;
 }
 
 .brandArtSlot{
   position: relative;
-  width: clamp(100px, 10vw, 160px);
+  width: clamp(120px, 12vw, 180px);
   flex: 0 0 auto;
   aspect-ratio: 1 / 1;
   overflow: visible;
@@ -185,10 +185,10 @@ h1{
 .brandText{
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  justify-content: center;
-  text-align: left;
-  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -196,9 +196,9 @@ h1{
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -44%);
-  width: 160%;
-  height: 160%;
+  transform: translate(-50%, -46%);
+  width: 180%;
+  height: 180%;
   background-image: url("/title-art.png");
   background-repeat: no-repeat;
   background-size: contain;
@@ -213,25 +213,24 @@ h1{
 @media (max-width: 900px){
   .titleDragon{ display: none; }
   .brandArtSlot{ display: none; }
+  .settingsGear{
+    position: absolute;
+    top: 0;
+    right: 0;
+  }
 }
 
 .metaRow{
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   position: relative;
   top: -2px;
 }
 
-.metaVersion{
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
 .metaWarn{
-  color: rgba(200, 170, 130, 0.60);
+  color: rgba(230, 140, 140, 0.55);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.01em;
@@ -242,6 +241,7 @@ h1{
 .utilityRow{
   margin-top: 16px;
   display: flex;
+  justify-content: center;
   gap: 10px;
   flex-wrap: wrap;
 }
@@ -399,11 +399,11 @@ h1{
     color 120ms ease;
 }
 
-.titleRow > .iconBtn{
-  position: absolute;
-  right: 0;
-  top: 0;
-  z-index: 3;
+.settingsGear{
+  position: fixed;
+  top: clamp(16px, 2vw, 28px);
+  right: clamp(16px, 2vw, 28px);
+  z-index: 10;
 }
 
 .iconBtn::before{
