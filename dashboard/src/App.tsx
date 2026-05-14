@@ -48,7 +48,7 @@ function splitMMSS(thresholdSec?: number): { mm: string; ss: string } {
   return { mm: String(mm), ss: String(ss).padStart(2, "0") };
 }
 
-const APP_VERSION = "0.1";
+const APP_VERSION = "0.2";
 const APP_CHANNEL = "Beta";
 const MAX_STREAMERS = 15;
 const MAX_QUIET_SPANS = 3;
@@ -77,7 +77,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       title: "Download the beta build",
       body:
         "runAlert is a large unsigned beta app right now. The source is public on GitHub, but macOS will still show a security warning until signing and notarization are added.",
-      imageSrc: "/install/step-1-open-download.png",
+      imageSrc: "/install-guide/step-1-open-download.png",
       imageAlt: "Downloaded runAlert disk image in the macOS dock",
     },
     {
@@ -85,7 +85,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       title: "Drag runAlert into Applications",
       body:
         "Open the DMG, then drag runAlert into the Applications folder. The extra runAlert volume you see in Finder is just the mounted disk image.",
-      imageSrc: "/install/step-2-drag-to-applications.png",
+      imageSrc: "/install-guide/step-2-drag-to-applications.png",
       imageAlt: "runAlert disk image showing the app being dragged into Applications",
     },
     {
@@ -93,7 +93,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       title: "Ignore the first security warning",
       body:
         "The first launch may show Apple's malware verification warning. That is expected for this unsigned beta build.",
-      imageSrc: "/install/step-3-gatekeeper-warning.png",
+      imageSrc: "/install-guide/step-3-gatekeeper-warning.png",
       imageAlt: "macOS gatekeeper warning shown when first opening runAlert",
     },
     {
@@ -101,7 +101,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       title: "Use Open Anyway in Privacy & Security",
       body:
         "Open macOS Settings, go to Privacy & Security, then click Open Anyway for runAlert. After that, launch the app again.",
-      imageSrc: "/install/step-4-open-anyway.png",
+      imageSrc: "/install-guide/step-4-open-anyway.png",
       imageAlt: "macOS Privacy & Security page showing the Open Anyway button for runAlert",
     },
     {
@@ -109,7 +109,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       title: "Enable notifications in macOS",
       body:
         "For reliable alerts, turn on notifications for runAlert and choose the banner, sound, lock screen, and grouping behavior you want in macOS settings.",
-      imageSrc: "/install/step-5-notification-settings.png",
+      imageSrc: "/install-guide/step-5-notification-settings.png",
       imageAlt: "macOS notification settings for runAlert",
     },
   ],
@@ -133,6 +133,12 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
         "After install, confirm Windows notifications are enabled so runAlert can surface alerts reliably in the background.",
     },
   ],
+};
+
+const SPECIAL_STREAMER_AVATARS: Record<string, string> = {
+  stableronaldo: "/special-streamers/stableronaldo.png",
+  forsen: "/special-streamers/forsen.png",
+  ohnepixel: "/special-streamers/ohnepixel.png",
 };
 
 function pad2(n: number) {
@@ -374,6 +380,14 @@ function App() {
     const handle = String(name || "").trim();
     if (!handle) return null;
     return `https://paceman.gg/stats/player/${encodeURIComponent(handle)}/runs/`;
+  }
+
+  function getAvatarSrc(name: string): string | null {
+    const normalized = String(name || "").trim().toLowerCase();
+    if (normalized && SPECIAL_STREAMER_AVATARS[normalized]) {
+      return SPECIAL_STREAMER_AVATARS[normalized];
+    }
+    return profileByName[name]?.avatarUrl ?? null;
   }
 
   function isStreamerLive(name: string): boolean {
@@ -1194,16 +1208,10 @@ function App() {
                   <h1 className="appTitle" data-testid="header-title">
                     Minecraft Speedrun Notifier
                   </h1>
-                  <span className="tag">
-                    {APP_CHANNEL}
-                  </span>
-                </div>
-                <div className="metaRow" data-testid="header-meta">
-                  <span className="metaVersion">v{APP_VERSION}</span>
-                </div>
-                <div className="betaDisclaimer">
-              Beta preview: possible bugs. Settings are saved{" "}
-              {desktopApp ? "on this device." : "per browser."}
+                  <div className="metaRow" data-testid="header-meta">
+                    <a className="tag" href="https://github.com/jz-42/runAlert" target="_blank" rel="noopener noreferrer">{APP_CHANNEL} <span className="tagVersion">v{APP_VERSION}</span></a>
+                    <span className="metaWarn">⚠ Possible bugs</span>
+                  </div>
                 </div>
                 <div className="utilityRow" data-testid="header-utilityRow">
                   {desktopApp ? (
@@ -1235,7 +1243,11 @@ function App() {
                               toggleNotificationsEnabled(!notificationsEnabled)
                             }
                           >
-                            {notificationsEnabled ? "●" : "○"}
+                            {notificationsEnabled ? (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" fill="currentColor"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
+                            )}
                           </button>
                           <button
                             type="button"
@@ -1251,7 +1263,11 @@ function App() {
                               toggleNotificationSound(!notificationSoundEnabled)
                             }
                           >
-                            {notificationSoundEnabled ? "🔊" : "🔇"}
+                            {notificationSoundEnabled ? (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                            )}
                           </button>
                         </div>
                       </div>
@@ -1268,6 +1284,20 @@ function App() {
                           <span className="utilityEyebrow">Quiet Hours</span>
                           <span className="utilityValue">{quietHoursSummary}</span>
                         </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${quietHoursSummary !== "None" ? "moon-on" : "moon-off"}`}
+                            aria-label="Edit quiet hours"
+                            onClick={openQuietHoursEditor}
+                          >
+                            {quietHoursSummary !== "None" ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            )}
+                          </button>
+                        </div>
                       </div>
 
                       <div className="utilityCard" data-testid="header-background">
@@ -1321,17 +1351,31 @@ function App() {
                                 : enableBrowserAlerts()
                             }
                           >
-                            {browserAlertsEnabled ? "●" : "○"}
+                            {browserAlertsEnabled ? (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" fill="currentColor"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
+                            )}
                           </button>
                           <button
                             type="button"
                             className={`utilityIconBtn ${
                               notificationSoundEnabled ? "on" : "off"
                             }`}
-                            aria-label="Open notification preferences"
-                            onClick={() => setShowNotifications(true)}
+                            aria-label={
+                              notificationSoundEnabled
+                                ? "Turn notification sound off"
+                                : "Turn notification sound on"
+                            }
+                            onClick={() =>
+                              toggleNotificationSound(!notificationSoundEnabled)
+                            }
                           >
-                            {notificationSoundEnabled ? "🔊" : "🔇"}
+                            {notificationSoundEnabled ? (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                            )}
                           </button>
                         </div>
                       </div>
@@ -1348,6 +1392,20 @@ function App() {
                           <span className="utilityEyebrow">Quiet Hours</span>
                           <span className="utilityValue">{quietHoursSummary}</span>
                         </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${quietHoursSummary !== "None" ? "moon-on" : "moon-off"}`}
+                            aria-label="Edit quiet hours"
+                            onClick={openQuietHoursEditor}
+                          >
+                            {quietHoursSummary !== "None" ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}
@@ -1362,7 +1420,7 @@ function App() {
           </div>
 
           <button
-            className="iconBtn"
+            className="iconBtn settingsGear"
             aria-label="Open settings"
             onClick={() => setShowSettings(true)}
           >
@@ -1667,11 +1725,11 @@ function App() {
           {streamers.map((name) => (
             <div className="avatarTile" key={name}>
               <button className="avatarBtn" onClick={() => setSelected(name)}>
-                {profileByName[name]?.avatarUrl ? (
+                {getAvatarSrc(name) ? (
                   <img
                     className="avatarImg"
                     alt={`${name} avatar`}
-                    src={profileByName[name].avatarUrl!}
+                    src={getAvatarSrc(name)!}
                     loading="lazy"
                   />
                 ) : null}
@@ -2291,7 +2349,7 @@ function App() {
                     </div>
                     <img
                       className="notifPreviewShot"
-                      src="/install/step-5-notification-settings.png"
+                      src="/install-guide/step-5-notification-settings.png"
                       alt="macOS notification settings for runAlert"
                       loading="lazy"
                     />

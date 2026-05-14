@@ -105,7 +105,7 @@
 .frame{
   max-width: 1280px;
   margin: 0 auto;
-  padding: clamp(24px, 3.5vw, 40px) clamp(20px, 4vw, 52px) 72px;
+  padding: clamp(20px, 2.5vw, 32px) clamp(20px, 4vw, 52px) 72px;
   position: relative;
   z-index: 1;
 }
@@ -115,31 +115,22 @@
 .titleRow{
   position: relative;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.titleRow::before{
-  display: none;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .titleLeft{
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  padding-right: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
   z-index: 1;
-}
-
-.titleLeft::before{
-  content: "";
-  display: none;
 }
 
 h1{
   margin: 0;
-  font-size: clamp(32px, 3.2vw, 46px);
+  font-size: clamp(28px, 3vw, 44px);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.08;
@@ -148,115 +139,130 @@ h1{
 .titleLine{
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  justify-content: center;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
-.titleLine > .tag{
-  position: relative;
-  top: -2px;
+.tag{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  min-height: 22px;
-  padding: 0 8px;
-  border: 1px solid rgba(212, 172, 96, 0.25);
-  background: rgba(212, 172, 96, 0.10);
-  color: rgba(212, 172, 96, 0.90);
+  min-height: 20px;
+  padding: 2px 8px;
+  border: 1px solid rgba(212, 172, 96, 0.35);
+  background: rgba(212, 172, 96, 0.14);
+  color: rgba(212, 172, 96, 0.95);
+  border-radius: 4px;
+  line-height: 1;
+}
+
+a.tag{
+  text-decoration: none;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+a.tag:hover{
+  border-color: rgba(212, 172, 96, 0.50);
+  background: rgba(212, 172, 96, 0.20);
+}
+
+.tagVersion{
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.65;
+  text-transform: none;
 }
 
 .brandRow{
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  --brandSlotW: clamp(180px, 13vw, 240px);
-  --brandDragonW: clamp(360px, 26vw, 480px);
-  --brandDragonH: clamp(280px, 21vw, 360px);
-  --brandDragonBleedLeftMax: -32px;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
 }
 
 .brandArtSlot{
   position: relative;
-  width: var(--brandSlotW);
-  height: 0;
-  overflow: visible;
+  width: clamp(110px, 10vw, 150px);
+  height: clamp(70px, 7vw, 100px);
   flex: 0 0 auto;
+  overflow: visible;
+  margin-right: 4px;
 }
 
 .brandText{
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 6px;
-  justify-items: start;
-  text-align: left;
+  text-align: center;
   flex: 0 1 auto;
   min-width: 0;
 }
 
 .titleDragon{
   position: absolute;
-  left: max(
-    calc((var(--brandSlotW) - var(--brandDragonW)) / 2),
-    var(--brandDragonBleedLeftMax)
-  );
-  top: -80px;
-  width: var(--brandDragonW);
-  height: var(--brandDragonH);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 200%;
+  height: 200%;
   background-image: url("/title-art.png");
   background-repeat: no-repeat;
   background-size: contain;
-  background-position: left center;
-  opacity: 1;
+  background-position: center;
   filter:
     brightness(1.08)
     contrast(1.02)
-    drop-shadow(0 16px 24px rgba(0,0,0,0.38));
+    drop-shadow(0 12px 20px rgba(0,0,0,0.38));
   pointer-events: none;
 }
 
 @media (max-width: 900px){
-  .titleDragon{ display:none; }
-  .brandRow{
-    flex-direction: column;
-    gap: 8px;
+  .titleDragon{ display: none; }
+  .brandArtSlot{ display: none; }
+  .settingsGear{
+    position: absolute;
+    top: 0;
+    right: 0;
   }
-  .brandArtSlot{ display:none; }
 }
 
 .metaRow{
-  margin-top: 6px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-start;
+  position: relative;
+  top: -2px;
 }
 
-.metaVersion{
-  color: rgba(155, 161, 176, 0.40);
+.metaWarn{
+  color: rgba(230, 140, 140, 0.55);
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
-.betaDisclaimer{
-  margin-top: 4px;
-  color: rgba(155, 161, 176, 0.48);
-  font-size: 11px;
   letter-spacing: 0.01em;
 }
 
 /* ── Pills / Tags ────────────────────────────────────────── */
 
 .utilityRow{
-  margin-top: 12px;
-  display: grid;
+  margin-top: 16px;
+  display: flex;
   gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  flex-wrap: wrap;
+  align-self: stretch;
+  justify-content: flex-start;
 }
 
 .utilityCard{
-  min-width: 0;
+  min-width: 150px;
+  max-width: 240px;
+  flex: 0 1 auto;
   display: flex;
   align-items: stretch;
   gap: 8px;
@@ -283,8 +289,8 @@ h1{
 }
 
 .utilityMain:focus-visible{
-  outline: 2px solid var(--focusRing);
-  outline-offset: 3px;
+  outline: none;
+  border-color: rgba(255,255,255,0.18);
 }
 
 .utilityEyebrow{
@@ -333,6 +339,18 @@ h1{
   border-color: rgba(255, 110, 110, 0.16);
   color: rgba(255, 140, 140, 0.84);
   background: rgba(255, 110, 110, 0.08);
+}
+
+.utilityIconBtn.moon-on{
+  border-color: rgba(100, 140, 220, 0.25);
+  color: rgba(120, 160, 235, 0.85);
+  background: rgba(100, 140, 220, 0.10);
+}
+
+.utilityIconBtn.moon-off{
+  border-color: var(--border);
+  color: rgba(155, 161, 176, 0.50);
+  background: rgba(255,255,255,0.03);
 }
 
 .utilityIconBtn:hover{
@@ -406,11 +424,11 @@ h1{
     color 120ms ease;
 }
 
-.titleRow > .iconBtn{
-  position: absolute;
-  right: 0;
-  top: 0;
-  z-index: 3;
+.settingsGear{
+  position: fixed;
+  top: clamp(16px, 2vw, 28px);
+  right: clamp(16px, 2vw, 28px);
+  z-index: 10;
 }
 
 .iconBtn::before{
@@ -434,8 +452,8 @@ h1{
 }
 
 .iconBtn:focus-visible{
-  outline: 2px solid var(--focusRing);
-  outline-offset: 3px;
+  outline: none;
+  border-color: rgba(255,255,255,0.18);
 }
 
 .iconSvg{
@@ -558,8 +576,8 @@ h1{
 }
 
 .avatarBtn:focus-visible{
-  outline: 2px solid var(--focusRing);
-  outline-offset: 5px;
+  outline: none;
+  border-color: rgba(255,255,255,0.18);
 }
 
 .avatarBtn.add{
@@ -753,7 +771,7 @@ h1{
 /* ── Download hub ────────────────────────────────────────── */
 
 .downloadHub{
-  margin: 48px auto 0;
+  margin: 72px auto 0;
   max-width: 760px;
   display: grid;
   gap: 14px;
