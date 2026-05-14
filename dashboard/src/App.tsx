@@ -1195,7 +1195,7 @@ function App() {
                     Minecraft Speedrun Notifier
                   </h1>
                   <div className="metaRow" data-testid="header-meta">
-                    <span className="tag">{APP_CHANNEL} <span className="tagVersion">v{APP_VERSION}</span></span>
+                    <a className="tag" href="https://github.com/jz-42/runAlert" target="_blank" rel="noopener noreferrer">{APP_CHANNEL} <span className="tagVersion">v{APP_VERSION}</span></a>
                     <span className="metaWarn">⚠ Possible bugs</span>
                   </div>
                 </div>

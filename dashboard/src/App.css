@@ -105,7 +105,7 @@
 .frame{
   max-width: 1280px;
   margin: 0 auto;
-  padding: clamp(12px, 1.5vw, 20px) clamp(20px, 4vw, 52px) 72px;
+  padding: clamp(20px, 2.5vw, 32px) clamp(20px, 4vw, 52px) 72px;
   position: relative;
   z-index: 1;
 }
@@ -161,6 +161,16 @@ h1{
   line-height: 1;
 }
 
+a.tag{
+  text-decoration: none;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+a.tag:hover{
+  border-color: rgba(212, 172, 96, 0.50);
+  background: rgba(212, 172, 96, 0.20);
+}
+
 .tagVersion{
   font-size: 9px;
   font-weight: 500;
@@ -177,11 +187,11 @@ h1{
 
 .brandArtSlot{
   position: relative;
-  width: clamp(80px, 7vw, 110px);
-  height: clamp(50px, 4.5vw, 70px);
+  width: clamp(90px, 8vw, 120px);
+  height: clamp(70px, 7vw, 100px);
   flex: 0 0 auto;
   overflow: visible;
-  margin-right: -4px;
+  margin-right: -8px;
 }
 
 .brandText{
@@ -198,9 +208,9 @@ h1{
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -58%);
-  width: 260%;
-  height: 260%;
+  transform: translate(-50%, -52%);
+  width: 300%;
+  height: 300%;
   background-image: url("/title-art.png");
   background-repeat: no-repeat;
   background-size: contain;
@@ -761,7 +771,7 @@ h1{
 /* ── Download hub ────────────────────────────────────────── */
 
 .downloadHub{
-  margin: 48px auto 0;
+  margin: 72px auto 0;
   max-width: 760px;
   display: grid;
   gap: 14px;
