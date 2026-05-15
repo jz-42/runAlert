@@ -164,85 +164,17 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
     {
       eyebrow: "Step 1",
       title: "Download runAlert",
-      body: (
-        <>
-          Click Download EXE (
-          <span className="installGuideEmphasisDownload">
-            runAlert-Setup-0.1.0-beta.2.exe
-          </span>
-          ).
-        </>
-      ),
-      details: [
-        "The download comes from runalert.app and the public GitHub release for jz-42/runAlert.",
-        "No account required.",
-      ],
-      note: (
-        <>
-          <span className="installGuideNoteLabel">
-            ⚠️ Important Security Note:
-          </span>{" "}
-          To verify this app is safe, send the{" "}
-          <a
-            className="installGuideInlineLink"
-            href={GITHUB_REPO_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            public source code
-          </a>{" "}
-          link to your preferred AI and upload your{" "}
-          <span className="installGuideEmphasisDownload">download file</span> to
-          scan for anything malicious. For a manual check, you can also review
-          the{" "}
-          <a
-            className="installGuideInlineLink"
-            href={GITHUB_REPO_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            public source code
-          </a>{" "}
-          yourself and verify the{" "}
-          <a
-            className="installGuideInlineLink installGuideInlineLink--checksum"
-            href={GITHUB_BETA_RELEASE_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            checksum
-          </a>{" "}
-          matches your download.
-        </>
-      ),
-      imageSrc: "/install-guide/windows-step-1-downloaded-exe-placeholder.svg",
-      imageAlt: "Placeholder image showing where the downloaded Windows installer will appear",
+      body: "Click Download EXE.",
     },
     {
       eyebrow: "Step 2",
       title: "Open the installer",
-      body: "Open the downloaded EXE, then follow the install prompts.",
-      imageSrc: "/install-guide/windows-step-2-installer-placeholder.svg",
-      imageAlt: "Placeholder image showing the Windows installer flow for runAlert",
+      body: "Run the installer and follow the prompts.",
     },
     {
       eyebrow: "Step 3",
-      title: "Try opening runAlert",
-      body:
-        "Open runAlert after install. Windows may show a protected your PC warning.",
-      details: [
-        "That warning is expected for this beta because the app is not code-signed yet.",
-      ],
-      imageSrc: "/install-guide/windows-step-3-smartscreen-placeholder.svg",
-      imageAlt: "Placeholder image showing the Windows protected your PC warning",
-    },
-    {
-      eyebrow: "Step 4",
-      title: "Click More info, then Run anyway",
-      body:
-        "Given that you've verified security yourself, feel free to override this. If Windows blocks the app, click More info, then Run anyway.",
-      imageSrc: "/install-guide/windows-step-4-run-anyway-placeholder.svg",
-      imageAlt: "Placeholder image showing where to click More info and Run anyway on Windows",
+      title: "Turn on notifications",
+      body: "Turn on notifications for runAlert in Windows.",
     },
   ],
 };
@@ -2219,6 +2151,9 @@ function App() {
                   openInstallGuide("mac");
                 }}
               >
+                <svg width="14" height="14" viewBox="0 0 384 512" fill="currentColor" style={{marginRight: 6, flexShrink: 0}}>
+                  <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184 4 273.5c0 26.2 4.8 53.3 14.4 81.2 12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
+                </svg>
                 Download Mac Beta
               </button>
               <button
@@ -2228,16 +2163,10 @@ function App() {
                   openInstallGuide("windows");
                 }}
               >
+                <svg width="14" height="14" viewBox="0 0 448 512" fill="currentColor" style={{marginRight: 6, flexShrink: 0}}>
+                  <path d="M0 93.7l183.6-25.3v177.4H0V93.7zm0 324.6l183.6 25.3V268.4H0v149.9zm203.8 28L448 480V268.4H203.8v177.9zm0-380.6v180.1H448V32L203.8 65.7z"/>
+                </svg>
                 Download Windows Beta
-              </button>
-              <button
-                className="installButton"
-                type="button"
-                onClick={() => {
-                  openInstallGuide("mac");
-                }}
-              >
-                Install Help
               </button>
             </div>
             {browserAlertsErr ? (
@@ -2705,7 +2634,7 @@ function App() {
 
         {showNotifications ? (
           <div
-            className="qhOverlay"
+            className="qhOverlay settingsSubOverlay"
             onClick={() => setShowNotifications(false)}
           >
             <div
@@ -2714,32 +2643,37 @@ function App() {
               role="dialog"
               aria-label="Notifications"
             >
-              <div className="qhHeader">
-                <div>
-                  <div className="qhTitle">Notifications</div>
-                  <div className="qhHelp">
-                    {desktopApp
-                      ? "Control whether runAlert sends alerts, plays sound, and works with macOS notification settings."
-                      : "Control whether runAlert shows browser alerts and plays the alert sound while this tab stays open."}
-                  </div>
-                </div>
+              <div className="settingsSubHeader">
+                <button
+                  type="button"
+                  className="settingsBackBtn"
+                  aria-label="Back to settings"
+                  onClick={() => {
+                    setShowNotifications(false);
+                    setShowSettings(true);
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M10 3.5L5.5 8L10 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Settings
+                </button>
                 <button
                   type="button"
                   className="iconBtn iconBtn--close"
                   aria-label="Close notifications"
                   onClick={() => setShowNotifications(false)}
                 >
-                  <svg
-                    className="iconSvg close"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fill="currentColor"
-                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
-                    />
+                  <svg className="iconSvg close" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"/>
                   </svg>
                 </button>
+              </div>
+              <div className="settingsSubTitle">Notifications</div>
+              <div className="settingsSubHelp">
+                {desktopApp
+                  ? "Control whether runAlert sends alerts, plays sound, and works with macOS notification settings."
+                  : "Control whether runAlert shows browser alerts and plays the alert sound while this tab stays open."}
               </div>
 
               <div className="notifBody">
@@ -2784,38 +2718,43 @@ function App() {
         ) : null}
 
         {showAgentSettings ? (
-          <div className="qhOverlay" onClick={() => setShowAgentSettings(false)}>
+          <div className="qhOverlay settingsSubOverlay" onClick={() => setShowAgentSettings(false)}>
             <div
               className="qhModal"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-label="Background monitoring"
             >
-              <div className="qhHeader">
-                <div>
-                  <div className="qhTitle">Background Monitoring</div>
-                  <div className="qhHelp">
-                    Keep runAlert in the background for seamless alerts, even
-                    after sleep or restart.
-                  </div>
-                </div>
+              <div className="settingsSubHeader">
+                <button
+                  type="button"
+                  className="settingsBackBtn"
+                  aria-label="Back to settings"
+                  onClick={() => {
+                    setShowAgentSettings(false);
+                    setShowSettings(true);
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M10 3.5L5.5 8L10 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Settings
+                </button>
                 <button
                   type="button"
                   className="iconBtn iconBtn--close"
                   aria-label="Close background monitoring settings"
                   onClick={() => setShowAgentSettings(false)}
                 >
-                  <svg
-                    className="iconSvg close"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fill="currentColor"
-                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
-                    />
+                  <svg className="iconSvg close" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"/>
                   </svg>
                 </button>
+              </div>
+              <div className="settingsSubTitle">Background Monitoring</div>
+              <div className="settingsSubHelp">
+                Keep runAlert in the background for seamless alerts, even
+                after sleep or restart.
               </div>
 
               <div className="notifBody">
@@ -2865,7 +2804,7 @@ function App() {
 
         {showQuietHours && cfg ? (
           <div
-            className="qhOverlay"
+            className="qhOverlay settingsSubOverlay"
             onClick={() => {
               if (quietSaving) return;
               setShowQuietHours(false);
@@ -2878,14 +2817,23 @@ function App() {
               role="dialog"
               aria-label="Quiet hours"
             >
-              <div className="qhHeader">
-                <div>
-                  <div className="qhTitle">Quiet Hours</div>
-                  <div className="qhHelp">
-                    During quiet hours, runAlert will keep monitoring runs, but
-                    it will not send notifications.
-                  </div>
-                </div>
+              <div className="settingsSubHeader">
+                <button
+                  type="button"
+                  className="settingsBackBtn"
+                  aria-label="Back to settings"
+                  onClick={() => {
+                    if (quietSaving) return;
+                    setShowQuietHours(false);
+                    setQuietErr(null);
+                    setShowSettings(true);
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M10 3.5L5.5 8L10 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Settings
+                </button>
                 <button
                   type="button"
                   className="iconBtn iconBtn--close"
@@ -2896,17 +2844,14 @@ function App() {
                     setQuietErr(null);
                   }}
                 >
-                  <svg
-                    className="iconSvg close"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fill="currentColor"
-                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
-                    />
+                  <svg className="iconSvg close" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"/>
                   </svg>
                 </button>
+              </div>
+              <div className="settingsSubTitle">Quiet Hours</div>
+              <div className="settingsSubHelp">
+                Mute notifications during specific times. Monitoring continues.
               </div>
 
               {quietErr ? <div className="qhError">{quietErr}</div> : null}
@@ -3072,12 +3017,7 @@ function App() {
                       );
                     })}
                   </div>
-                ) : (
-                  <div className="qhEmpty">
-                    No quiet hours set. Add a span to mute notifications during
-                    specific times.
-                  </div>
-                )}
+                ) : null}
 
                 <div className="qhFooter">
                   <button
