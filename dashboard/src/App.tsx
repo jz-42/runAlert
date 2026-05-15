@@ -56,6 +56,9 @@ const BROWSER_ALERTS_DEDUPE_KEY = "runalert-browser-alerts-dedupe";
 const ONBOARDING_DISMISSED_KEY = "runalert-onboarding-dismissed";
 const APP_FIRST_OPENED_KEY = "runalert-app-first-opened";
 const DESKTOP_BG_RUNNING_KEY = "runalert-desktop-background-running";
+const GITHUB_REPO_URL = "https://github.com/jz-42/runAlert";
+const GITHUB_BETA_RELEASE_URL =
+  "https://github.com/jz-42/runAlert/releases/tag/v0.1.0-beta.2";
 
 type AmPm = "AM" | "PM";
 type Time12 = { hh: string; mm: string; ampm: AmPm };
@@ -64,7 +67,9 @@ type InstallGuidePlatform = "mac" | "windows";
 type InstallGuideStep = {
   eyebrow: string;
   title: string;
-  body: string;
+  body: React.ReactNode;
+  details?: React.ReactNode[];
+  note?: React.ReactNode;
   imageSrc?: string;
   imageAlt?: string;
 };
@@ -74,21 +79,75 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
     {
       eyebrow: "Step 1",
       title: "Download runAlert",
-      body: "Click Download DMG.",
-      imageSrc: "/install-guide/step-1-open-download.png",
-      imageAlt: "Downloaded runAlert disk image in the macOS dock",
+      body: (
+        <>
+          Click Download DMG (
+          <span className="installGuideEmphasisDownload">
+            runAlert-0.1.0-beta.2-arm64.dmg
+          </span>
+          ).
+        </>
+      ),
+      details: [
+        "The download comes from runalert.app and the public GitHub release for jz-42/runAlert.",
+        "No account required.",
+      ],
+      note: (
+        <>
+          <span className="installGuideNoteLabel">
+            ⚠️ Important Security Note:
+          </span>{" "}
+          To verify this app is safe, send the{" "}
+          <a
+            className="installGuideInlineLink"
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            public source code
+          </a>{" "}
+          link to your preferred AI and upload your{" "}
+          <span className="installGuideEmphasisDownload">download file</span> to
+          scan for anything malicious. For a manual check, you can also review
+          the{" "}
+          <a
+            className="installGuideInlineLink"
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            public source code
+          </a>{" "}
+          yourself and verify the{" "}
+          <a
+            className="installGuideInlineLink installGuideInlineLink--checksum"
+            href={GITHUB_BETA_RELEASE_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            checksum
+          </a>{" "}
+          matches your download.
+        </>
+      ),
+      imageSrc: "/install-guide/step-1-downloaded-dmg.png",
+      imageAlt: "Downloaded runAlert disk image shown in the macOS downloads area",
     },
     {
       eyebrow: "Step 2",
-      title: "Open the file you downloaded",
-      body: "Open the DMG, then drag runAlert into Applications.",
+      title: "Open the DMG and drag runAlert to Applications",
+      body: "Open the downloaded file, then drag runAlert into Applications.",
       imageSrc: "/install-guide/step-2-drag-to-applications.png",
       imageAlt: "runAlert disk image showing the app being dragged into Applications",
     },
     {
       eyebrow: "Step 3",
       title: "Try opening runAlert",
-      body: "Open runAlert from Applications.",
+      body:
+        "Open runAlert from Applications. macOS may say Apple cannot verify the app.",
+      details: [
+        "That warning is expected for this beta because the app is unsigned by Apple.",
+      ],
       imageSrc: "/install-guide/step-3-gatekeeper-warning.png",
       imageAlt: "macOS gatekeeper warning shown when first opening runAlert",
     },
@@ -96,16 +155,9 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       eyebrow: "Step 4",
       title: "Click Open Anyway",
       body:
-        "If your Mac blocks it, go to Settings → Privacy & Security and click Open Anyway. Then open the app again.",
+        "Given that you've verified security yourself, feel free to override this. If your Mac blocks it, go to Settings → Privacy & Security and click Open Anyway. Then open the app again.",
       imageSrc: "/install-guide/step-4-open-anyway.png",
       imageAlt: "macOS Privacy & Security page showing the Open Anyway button for runAlert",
-    },
-    {
-      eyebrow: "Step 5",
-      title: "Turn on notifications",
-      body: "Turn on notifications for runAlert in macOS Settings.",
-      imageSrc: "/install-guide/step-5-notification-settings.png",
-      imageAlt: "macOS notification settings for runAlert",
     },
   ],
   windows: [
@@ -1451,7 +1503,7 @@ function App() {
                   <div className="metaRow" data-testid="header-meta">
                     <a
                       className="tag"
-                      href="https://github.com/jz-42/runAlert"
+                      href={GITHUB_REPO_URL}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -2324,6 +2376,18 @@ function App() {
                     <div className="installGuideBody">
                       {activeInstallStep.body}
                     </div>
+                    {activeInstallStep.details?.length ? (
+                      <ul className="installGuideList">
+                        {activeInstallStep.details.map((detail, idx) => (
+                          <li key={idx}>{detail}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {activeInstallStep.note ? (
+                      <div className="installGuideNote">
+                        {activeInstallStep.note}
+                      </div>
+                    ) : null}
 
                     {installGuideStep === 0 ? (
                       <div className="installGuideActions">
@@ -2358,11 +2422,11 @@ function App() {
                         ) : null}
                         <a
                           className="installLink"
-                          href="https://github.com/jz-42/runAlert"
+                          href={GITHUB_BETA_RELEASE_URL}
                           target="_blank"
                           rel="noreferrer"
                         >
-                          View public source
+                          View release + checksums
                         </a>
                       </div>
                     ) : null}
