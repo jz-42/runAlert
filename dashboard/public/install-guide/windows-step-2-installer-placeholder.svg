@@ -1,0 +1,16 @@
+<svg width="1200" height="760" viewBox="0 0 1200 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="760" rx="40" fill="#0E1418"/>
+  <rect x="130" y="96" width="940" height="568" rx="32" fill="#E9EEF3"/>
+  <rect x="130" y="96" width="940" height="88" rx="32" fill="#D9E1E8"/>
+  <circle cx="188" cy="140" r="10" fill="#9EB0BC"/>
+  <circle cx="226" cy="140" r="10" fill="#9EB0BC"/>
+  <circle cx="264" cy="140" r="10" fill="#9EB0BC"/>
+  <rect x="192" y="246" width="368" height="20" rx="10" fill="#9CB1BD"/>
+  <rect x="192" y="294" width="552" height="18" rx="9" fill="#C2CDD6"/>
+  <rect x="192" y="330" width="500" height="18" rx="9" fill="#C2CDD6"/>
+  <rect x="192" y="366" width="472" height="18" rx="9" fill="#C2CDD6"/>
+  <rect x="192" y="464" width="170" height="56" rx="18" fill="#243039"/>
+  <text x="277" y="500" text-anchor="middle" fill="#F5E39F" font-family="Arial, sans-serif" font-size="24" font-weight="700">Next</text>
+  <rect x="112" y="610" width="976" height="82" rx="24" fill="#10171C" stroke="#26343D" stroke-width="2" stroke-dasharray="12 12"/>
+  <text x="600" y="660" text-anchor="middle" fill="#F6F7F8" font-family="Arial, sans-serif" font-size="34" font-weight="700">Replace with the installer window screenshot</text>
+</svg>

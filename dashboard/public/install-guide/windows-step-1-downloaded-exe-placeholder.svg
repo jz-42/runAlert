@@ -1,0 +1,13 @@
+<svg width="1200" height="760" viewBox="0 0 1200 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="760" rx="40" fill="#0E1418"/>
+  <rect x="52" y="52" width="1096" height="656" rx="28" fill="#151E24" stroke="#26343D" stroke-width="2"/>
+  <rect x="104" y="112" width="430" height="76" rx="22" fill="#202D35" stroke="#3A4B55" stroke-width="2"/>
+  <text x="138" y="160" fill="#F3E3A2" font-family="Arial, sans-serif" font-size="32" font-weight="700">runAlert-Setup-0.1.0-beta.2.exe</text>
+  <rect x="884" y="104" width="160" height="176" rx="26" fill="#F5F7FA"/>
+  <path d="M949 138H997L1020 161V246C1020 257.046 1011.05 266 1000 266H928C916.954 266 908 257.046 908 246V158C908 146.954 916.954 138 928 138H949Z" fill="#E9EEF4"/>
+  <path d="M997 138V161H1020" stroke="#D3DAE2" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="112" y="374" width="976" height="250" rx="28" fill="#10171C" stroke="#26343D" stroke-width="2" stroke-dasharray="12 12"/>
+  <text x="600" y="468" text-anchor="middle" fill="#F6F7F8" font-family="Arial, sans-serif" font-size="42" font-weight="700">Windows Screenshot Placeholder</text>
+  <text x="600" y="528" text-anchor="middle" fill="#9DB0BC" font-family="Arial, sans-serif" font-size="28">Replace with the downloaded EXE visible in Downloads or the browser shelf</text>
+  <text x="600" y="575" text-anchor="middle" fill="#6F8794" font-family="Arial, sans-serif" font-size="22">Step 1: Download runAlert</text>
+</svg>

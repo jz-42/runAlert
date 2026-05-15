@@ -1,0 +1,13 @@
+<svg width="1200" height="760" viewBox="0 0 1200 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="760" rx="40" fill="#091117"/>
+  <rect x="190" y="118" width="820" height="524" rx="34" fill="#11202A" stroke="#254453" stroke-width="2"/>
+  <circle cx="600" cy="248" r="56" fill="#1F7AE0"/>
+  <path d="M600 216V260" stroke="white" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="600" cy="294" r="8" fill="white"/>
+  <text x="600" y="372" text-anchor="middle" fill="#F6F7F8" font-family="Arial, sans-serif" font-size="44" font-weight="700">Windows protected your PC</text>
+  <text x="600" y="432" text-anchor="middle" fill="#9DB0BC" font-family="Arial, sans-serif" font-size="28">Placeholder for the SmartScreen warning screenshot</text>
+  <rect x="324" y="506" width="188" height="58" rx="18" fill="#243039"/>
+  <text x="418" y="543" text-anchor="middle" fill="#F6F7F8" font-family="Arial, sans-serif" font-size="24" font-weight="700">Don't run</text>
+  <rect x="540" y="506" width="188" height="58" rx="18" fill="#202B32" stroke="#51636D" stroke-width="2"/>
+  <text x="634" y="543" text-anchor="middle" fill="#F5E39F" font-family="Arial, sans-serif" font-size="24" font-weight="700">More info</text>
+</svg>

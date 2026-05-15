@@ -164,17 +164,85 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
     {
       eyebrow: "Step 1",
       title: "Download runAlert",
-      body: "Click Download EXE.",
+      body: (
+        <>
+          Click Download EXE (
+          <span className="installGuideEmphasisDownload">
+            runAlert-Setup-0.1.0-beta.2.exe
+          </span>
+          ).
+        </>
+      ),
+      details: [
+        "The download comes from runalert.app and the public GitHub release for jz-42/runAlert.",
+        "No account required.",
+      ],
+      note: (
+        <>
+          <span className="installGuideNoteLabel">
+            ⚠️ Important Security Note:
+          </span>{" "}
+          To verify this app is safe, send the{" "}
+          <a
+            className="installGuideInlineLink"
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            public source code
+          </a>{" "}
+          link to your preferred AI and upload your{" "}
+          <span className="installGuideEmphasisDownload">download file</span> to
+          scan for anything malicious. For a manual check, you can also review
+          the{" "}
+          <a
+            className="installGuideInlineLink"
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            public source code
+          </a>{" "}
+          yourself and verify the{" "}
+          <a
+            className="installGuideInlineLink installGuideInlineLink--checksum"
+            href={GITHUB_BETA_RELEASE_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            checksum
+          </a>{" "}
+          matches your download.
+        </>
+      ),
+      imageSrc: "/install-guide/windows-step-1-downloaded-exe-placeholder.svg",
+      imageAlt: "Placeholder image showing where the downloaded Windows installer will appear",
     },
     {
       eyebrow: "Step 2",
       title: "Open the installer",
-      body: "Run the installer and follow the prompts.",
+      body: "Open the downloaded EXE, then follow the install prompts.",
+      imageSrc: "/install-guide/windows-step-2-installer-placeholder.svg",
+      imageAlt: "Placeholder image showing the Windows installer flow for runAlert",
     },
     {
       eyebrow: "Step 3",
-      title: "Turn on notifications",
-      body: "Turn on notifications for runAlert in Windows.",
+      title: "Try opening runAlert",
+      body:
+        "Open runAlert after install. Windows may show a protected your PC warning.",
+      details: [
+        "That warning is expected for this beta because the app is not code-signed yet.",
+      ],
+      imageSrc: "/install-guide/windows-step-3-smartscreen-placeholder.svg",
+      imageAlt: "Placeholder image showing the Windows protected your PC warning",
+    },
+    {
+      eyebrow: "Step 4",
+      title: "Click More info, then Run anyway",
+      body:
+        "Given that you've verified security yourself, feel free to override this. If Windows blocks the app, click More info, then Run anyway.",
+      imageSrc: "/install-guide/windows-step-4-run-anyway-placeholder.svg",
+      imageAlt: "Placeholder image showing where to click More info and Run anyway on Windows",
     },
   ],
 };
