@@ -326,9 +326,11 @@ function createApp({
   }
 
   function isSupabaseEnabled() {
-    return String(process.env.RUNALERT_CONFIG_STORE || "")
+    const explicit = String(process.env.RUNALERT_CONFIG_STORE || "")
       .trim()
-      .toLowerCase() === "supabase";
+      .toLowerCase();
+    if (explicit === "supabase") return true;
+    return Boolean(SUPABASE_URL && getSupabaseKey());
   }
 
   function getSupabaseKey() {

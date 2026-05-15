@@ -16,6 +16,14 @@ services:
         sync: false
       - key: TWITCH_CLIENT_SECRET
         sync: false
+      - key: RUNALERT_CONFIG_STORE
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_CONFIG_TABLE
+        sync: false
       - key: RUNALERT_MAC_DMG_URL
         sync: false
       - key: RUNALERT_MAC_ZIP_URL
