@@ -16,6 +16,7 @@
     "electron:build": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --dir",
     "electron:pack:mac": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --mac dmg zip",
     "electron:pack:win": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --win nsis",
+    "windows:beta:build": "powershell -ExecutionPolicy Bypass -File scripts/build-windows-beta.ps1",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:backend": "vitest run",

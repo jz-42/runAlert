@@ -57,14 +57,20 @@ On the Windows laptop:
 
 ```bash
 git pull
-npm ci
-npm --prefix dashboard ci
-npm run electron:pack:win
+npm run windows:beta:build
 ```
 
 Expected result:
 
 - a Windows installer `.exe` in `dist-app`
+
+Manual fallback:
+
+```bash
+npm ci
+npm --prefix dashboard ci
+npm run electron:pack:win
+```
 
 ## 5. Windows Download Activation
 
