@@ -21,7 +21,21 @@ create table if not exists runalert_configs (
 );
 ```
 
-## 2. Final Mac Sanity Pass
+## 2. Basic Analytics
+
+In Render, confirm:
+
+- `VITE_POSTHOG_KEY`
+- optional `VITE_POSTHOG_HOST`
+
+Then verify at least one live event lands:
+
+1. open the live site
+2. click a download button
+3. add a streamer
+4. confirm those events appear in PostHog
+
+## 3. Final Mac Sanity Pass
 
 From the live site:
 
@@ -37,7 +51,7 @@ From the live site:
    - background monitoring
    - quit behavior
 
-## 3. Windows Build
+## 4. Windows Build
 
 On the Windows laptop:
 
@@ -52,7 +66,7 @@ Expected result:
 
 - a Windows installer `.exe` in `dist-app`
 
-## 4. Windows Download Activation
+## 5. Windows Download Activation
 
 If the Windows build succeeds:
 
@@ -64,7 +78,7 @@ If the Windows build succeeds:
 curl -I https://runalert.app/download/windows/exe
 ```
 
-## 5. Windows Smoke Test
+## 6. Windows Smoke Test
 
 On the Windows laptop:
 
@@ -75,12 +89,13 @@ On the Windows laptop:
 5. sanity check notifications and quiet hours
 6. note any SmartScreen or installer friction
 
-## 6. Public Launch Decision
+## 7. Public Launch Decision
 
 Ship if:
 
 - Mac path is clean
 - hosted config persistence is confirmed
+- analytics are live enough to observe launch traffic
 - Windows is either verified enough for beta or clearly labeled as secondary
 - trust copy is honest
 

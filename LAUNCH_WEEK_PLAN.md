@@ -2,63 +2,56 @@
 
 Canonical plan: [docs/EXECUTION_PLAN.md](/Users/JerryZhan/runAlert/docs/EXECUTION_PLAN.md).
 
-## Where We Are
+## What Must Happen Before A Public Post
 
-Launch work is now mostly ops + validation, not product design.
+1. confirm hosted browser config persistence
+2. confirm basic analytics are live
+3. run final Mac sanity pass
+4. build Windows installer on the Windows laptop
+5. activate Windows download if that succeeds
+6. run Windows smoke test
+7. finalize public-post trust copy
 
-Done:
+## Concrete Phases
 
-- live Mac download is refreshed
-- Mac trust/install guide is improved
-- background-monitoring product story is defined
-- hosted config persistence was hardened in code
+### Phase 1: Hosted State + Metrics
 
-Open:
+Estimated time: `20-40 min`
 
-- confirm production Supabase config persistence envs
-- final Mac sanity pass from the real site
-- build Windows installer on the Windows laptop
-- activate Windows download if the build succeeds
-- final public-post trust copy
+- confirm Supabase envs/table
+- verify browser config survives redeploy
+- confirm PostHog envs
+- verify one or two real analytics events arrive
 
-## Ship Checklist
+### Phase 2: Final Mac Sanity
 
-- [ ] Mac live download is current
-- [ ] Mac install flow works end-to-end
-- [ ] packaged alerts behave well enough for beta
-- [ ] quiet hours behave well enough for beta
-- [ ] background monitoring is understandable and sane
-- [ ] hosted browser config persistence is confirmed
-- [ ] trust/safety message is simple and honest
+Estimated time: `30-60 min`
 
-## Next Order
+- real-site download
+- install
+- alert / quiet-hours / background-monitoring sanity
 
-1. confirm Supabase config persistence on Render
-2. run final Mac sanity pass
-3. build Windows installer on the Windows laptop
-4. activate Windows download if that build succeeds
-5. run Windows smoke test
-6. finalize launch / Reddit copy
+### Phase 3: Windows Build + Activation
 
-## Trust Reminder
+Estimated time: `50-100 min`
 
-For beginner users:
+- build on the Windows laptop
+- upload `.exe`
+- set Render Windows URL
+- verify download
+- smoke test installer/app
 
-- explain what the app does
-- explain that no account is required
-- explain what stays local
-- explain the unsigned Mac warning honestly
+### Phase 4: Final Public Copy
 
-For technical users:
+Estimated time: `20-30 min`
 
-- public repo
-- public release
-- checksums
-- optional AI-assisted sanity check
+- release notes
+- Reddit/public post
+- trust/safety framing
 
-## Not Today
+## Launch Truths
 
-- signing / notarization
-- full Windows polish beyond smoke testing
-- metrics cleanup
-- update-awareness UI
+- Mac is primary
+- Windows is secondary until the laptop build and smoke test are done
+- metrics should be live before the public post
+- signing/notarization are not same-day blockers

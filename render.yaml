@@ -24,6 +24,10 @@ services:
         sync: false
       - key: SUPABASE_CONFIG_TABLE
         sync: false
+      - key: VITE_POSTHOG_KEY
+        sync: false
+      - key: VITE_POSTHOG_HOST
+        sync: false
       - key: RUNALERT_MAC_DMG_URL
         sync: false
       - key: RUNALERT_MAC_ZIP_URL

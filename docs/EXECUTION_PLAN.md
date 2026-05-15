@@ -7,129 +7,101 @@ Ship a public beta that is honest, usable, and narrow:
 - `runalert.app` is the public front door
 - desktop is the real product
 - Mac is the primary launch platform
-- Windows is a stretch-parity platform, not the core launch dependency
-- browser alerts stay a lightweight demo, not the main promise
+- Windows is secondary but should be tested if time allows
+- browser alerts remain a lightweight demo, not the main promise
 
-## Ship Decision Checklist
+## Before Public Posting
 
-Ship publicly only if all are true:
+Do not post publicly until all of these are done:
 
-- [ ] live Mac download serves the current build
-- [ ] clean Mac install works from the real `runalert.app` flow
-- [ ] packaged desktop alerts work well enough for beta
-- [ ] quiet hours behave correctly in the packaged app
-- [ ] background monitoring feels understandable and sane
-- [ ] no major onboarding/install confusion remains
-- [ ] trust/security explanation is clear and honest
-- [ ] Reddit/public copy is honest about beta status and current limitations
+- [ ] hosted browser config persistence is confirmed
+- [ ] live Mac install flow is sanity-checked from the real site
+- [ ] packaged alerts + quiet hours are sanity-checked
+- [ ] background monitoring is sanity-checked
+- [ ] basic analytics are live and verified
+- [ ] trust/safety language is finalized
+- [ ] Windows is either tested enough for beta or clearly framed as secondary
 
 ## Current Reality
 
 Done:
 
-- web + desktop beta product exists
-- Twitch-live semantics are fixed
-- custom drag/reorder polish landed
-- desktop notification actions are explicit (`Open Stream` / `Dismiss`)
-- background-monitoring UX and onboarding direction are implemented
-- Mac guide was tightened around trust + Gatekeeper flow
-- fresh Mac `.dmg` / `.zip` artifacts were built
-- GitHub beta release `v0.1.0-beta.2` was refreshed
-- live Mac download endpoints now point at the refreshed release assets
-- hosted config persistence was hardened so Supabase-backed token configs are
-  auto-detected when env vars are present
+- live Mac download is refreshed and points at the new release assets
+- Mac install guide/trust flow is improved
+- background-monitoring UX is implemented
+- hosted config persistence is hardened in code:
+  Supabase-backed token configs auto-enable when env vars are present
+- dashboard analytics wiring already exists in code
 
 Still open:
 
-- final real Mac beta sanity pass from the live site
-- verify production hosted config persistence is actually using Supabase envs
-- Windows installer must be built on the real Windows laptop
-- Windows download activation + smoke test
-- final trust/release/Reddit copy pass
+- verify production Supabase envs/table
+- verify production analytics envs and event flow
+- final Mac live sanity pass
+- build Windows installer on the Windows laptop
+- activate Windows download if that build succeeds
+- final public-post / release / trust copy
 
-## Trust And Security
+## Phased Plan
 
-There are two audiences:
+### Phase 1: Hosted State And Metrics
 
-- beginner users who want a simple reason this is not sketchy
-- technical users who want a concrete way to verify the release
+Estimated time: `20-40 min`
 
-What we can truthfully say:
-
-- code is public in `jz-42/runAlert`
-- no account is required
-- desktop config is local for beta
-- the app has a narrow scope:
-  streamer monitoring, Twitch-live checks, milestones, alerts
-- GitHub release checksums are published for the Mac build
-- the current Mac build is unsigned, so macOS may show a warning
-
-What we should not say:
-
-- that unsigned means unsafe
-- that AI review “proves” safety
-- that public source alone guarantees safety
-- that the app is signed/notarized if it is not
-
-Trust path for beginner users:
-
-- explain what the app does
-- explain what stays local
-- explain that no account is needed
-- explain the Mac warning in plain English
-
-Trust path for technical users:
-
-- public repo
-- public GitHub release
-- checksums
-- optional AI-assisted repo/file sanity check
-
-## Remaining Launch Order
-
-### 1. Confirm Hosted Config Persistence
-
-Goal: make sure web users do not lose token-based config on Render redeploys.
+Goal: make sure the public site preserves user config and records basic launch
+signals before traffic arrives.
 
 Tasks:
 
-- [ ] Check Render env vars:
+- [ ] In Render, confirm:
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`
   - optional `SUPABASE_CONFIG_TABLE`
-- [ ] Confirm the `runalert_configs` table exists in Supabase
-- [ ] Verify a browser config survives a redeploy/restart
+- [ ] In Supabase, confirm the `runalert_configs` table exists
+- [ ] Verify a browser config survives a Render redeploy/restart
+- [ ] In Render, set:
+  - `VITE_POSTHOG_KEY`
+  - optional `VITE_POSTHOG_HOST`
+- [ ] Verify at least one live analytics event arrives:
+  - page open
+  - download click
+  - streamer add
 
-Important note:
+Why this is before public posting:
 
-- code is now hardened to auto-use Supabase when those env vars are present
-- if those env vars are missing, hosted token configs can still reset
+- if config resets, the web experience feels broken
+- if analytics are absent, you lose the first real launch signal
 
-### 2. Final Mac Sanity Pass
+### Phase 2: Final Mac Sanity
 
-Goal: verify the real public Mac path one last time before public posting.
+Estimated time: `30-60 min`
+
+Goal: verify the real public Mac path one last time.
 
 Tasks:
 
-- [ ] Download from `runalert.app`
-- [ ] Install from the refreshed live artifact
-- [ ] Verify:
-  - app opens
-  - add/edit streamer flow feels fine
-  - Twitch live dot behavior looks right
-  - one real alert path works
-  - quiet hours suppress correctly
-  - background monitoring on/off feels sane
-  - quit behavior with background monitoring on is understandable
+- [ ] open `runalert.app`
+- [ ] open the Mac install guide
+- [ ] download the DMG
+- [ ] install the app
+- [ ] verify:
+  - add/edit streamer flow
+  - Twitch live dot behavior
+  - one alert path
+  - quiet hours
+  - background monitoring
+  - quit behavior
 
-### 3. Windows Build On The Windows Laptop
+### Phase 3: Windows Build
 
-Goal: produce and validate a real Windows installer.
+Estimated time: `30-60 min`
+
+Goal: produce a real Windows installer.
 
 Important reality:
 
-- the Mac cross-build path fails in Wine during Windows packaging
-- the correct path is to build on the actual Windows laptop
+- the Mac cross-build path fails in Wine
+- the real build should happen on the Windows laptop
 
 Tasks on Windows:
 
@@ -137,50 +109,76 @@ Tasks on Windows:
 - [ ] `npm ci`
 - [ ] `npm --prefix dashboard ci`
 - [ ] `npm run electron:pack:win`
-- [ ] confirm a real `.exe` lands in `dist-app`
+- [ ] confirm a real `.exe` appears in `dist-app`
 
 Signing:
 
 - [ ] not required for beta launch
 - [ ] expect SmartScreen / unknown publisher friction until later
 
-### 4. Windows Download Activation
+### Phase 4: Windows Activation And Smoke Test
 
-Goal: make the Windows download real if the Windows build succeeds.
+Estimated time: `20-40 min`
+
+Goal: make Windows real enough to mention publicly.
 
 Tasks:
 
 - [ ] upload the Windows `.exe` to the GitHub beta release
 - [ ] set `RUNALERT_WINDOWS_EXE_URL` in Render
 - [ ] verify `/download/windows/exe`
+- [ ] install on the Windows laptop
+- [ ] sanity check:
+  - app opens
+  - add streamer
+  - one alert path
+  - notifications
+  - quiet hours
 
-### 5. Windows Smoke Test
+### Phase 5: Final Trust And Public Copy
 
-Goal: confirm Windows is usable enough for beta.
-
-Tasks:
-
-- [ ] install app
-- [ ] open app
-- [ ] add streamer
-- [ ] test one alert path
-- [ ] sanity check notifications + quiet hours
-- [ ] record any installer or SmartScreen friction
-
-### 6. Launch Copy And Public Post
+Estimated time: `20-30 min`
 
 Goal: make the public explanation honest and low-friction.
 
 Tasks:
 
-- [ ] final trust/safety note on the site/install flow
-- [ ] final release notes are understandable to non-devs
-- [ ] Reddit post explains:
-  - this is a beta
+- [ ] finalize release notes
+- [ ] finalize Reddit/public post copy
+- [ ] make sure the post says:
+  - beta
   - Mac-first
   - no account required
   - source is public
   - current Mac build is unsigned
+  - Windows status is accurate
+
+## Trust And Security
+
+There are two audiences:
+
+- beginner users who want a simple reason this is not sketchy
+- technical users who want a way to verify the release
+
+For beginner users:
+
+- explain what the app does
+- explain what stays local
+- explain that no account is required
+- explain the unsigned Mac warning in plain English
+
+For technical users:
+
+- public repo
+- public release
+- checksums
+- optional AI-assisted sanity check
+
+Do not say:
+
+- that AI review guarantees safety
+- that unsigned means unsafe
+- that the app is signed/notarized if it is not
 
 ## Not A Blocker Today
 
@@ -188,13 +186,13 @@ Do not let these delay the beta:
 
 - Apple signing/notarization
 - Windows code signing
-- metrics cleanup
 - update-awareness UI
+- deeper analytics cleanup beyond basic live verification
 - broad visual redesign
 
 ## Useful Commands
 
-Local verification:
+Local:
 
 ```bash
 cd /Users/JerryZhan/runAlert
@@ -204,7 +202,7 @@ npm run dashboard:build
 npm run electron:pack:mac
 ```
 
-Live checks:
+Live:
 
 ```bash
 curl -I https://runalert.app/download/macos/dmg
@@ -220,21 +218,3 @@ npm ci
 npm --prefix dashboard ci
 npm run electron:pack:win
 ```
-
-## Non-Negotiables
-
-Be explicit about these:
-
-- this is a beta
-- browser alerts require the tab to stay open
-- desktop is the durable experience
-- desktop config is local for beta
-- Twitch live means Twitch live
-- the current Mac build is unsigned unless signing/notarization is later added
-
-Do not claim these:
-
-- Windows is ready before it is actually built and smoke-tested
-- AI review guarantees safety
-- the Mac build is signed/notarized if it is not
-- background monitoring survives a full quit unless that behavior is verified
