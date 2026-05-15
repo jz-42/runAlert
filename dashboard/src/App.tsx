@@ -29,7 +29,7 @@ type Config = {
   };
   agent?: {
     autoUpdate?: boolean;
-    forsenOcr?: boolean;
+    backgroundMonitoring?: boolean;
   };
 };
 
@@ -73,41 +73,37 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
   mac: [
     {
       eyebrow: "Step 1",
-      title: "Download the beta build",
-      body:
-        "runAlert is a large unsigned beta app right now. The source is public on GitHub, but macOS will still show a security warning until signing and notarization are added.",
+      title: "Download runAlert",
+      body: "Click Download DMG.",
       imageSrc: "/install-guide/step-1-open-download.png",
       imageAlt: "Downloaded runAlert disk image in the macOS dock",
     },
     {
       eyebrow: "Step 2",
-      title: "Drag runAlert into Applications",
-      body:
-        "Open the DMG, then drag runAlert into the Applications folder. The extra runAlert volume you see in Finder is just the mounted disk image.",
+      title: "Open the file you downloaded",
+      body: "Open the DMG, then drag runAlert into Applications.",
       imageSrc: "/install-guide/step-2-drag-to-applications.png",
       imageAlt: "runAlert disk image showing the app being dragged into Applications",
     },
     {
       eyebrow: "Step 3",
-      title: "Ignore the first security warning",
-      body:
-        "The first launch may show Apple's malware verification warning. That is expected for this unsigned beta build.",
+      title: "Try opening runAlert",
+      body: "Open runAlert from Applications.",
       imageSrc: "/install-guide/step-3-gatekeeper-warning.png",
       imageAlt: "macOS gatekeeper warning shown when first opening runAlert",
     },
     {
       eyebrow: "Step 4",
-      title: "Use Open Anyway in Privacy & Security",
+      title: "Click Open Anyway",
       body:
-        "Open macOS Settings, go to Privacy & Security, then click Open Anyway for runAlert. After that, launch the app again.",
+        "If your Mac blocks it, go to Settings → Privacy & Security and click Open Anyway. Then open the app again.",
       imageSrc: "/install-guide/step-4-open-anyway.png",
       imageAlt: "macOS Privacy & Security page showing the Open Anyway button for runAlert",
     },
     {
       eyebrow: "Step 5",
-      title: "Enable notifications in macOS",
-      body:
-        "For reliable alerts, turn on notifications for runAlert and choose the banner, sound, lock screen, and grouping behavior you want in macOS settings.",
+      title: "Turn on notifications",
+      body: "Turn on notifications for runAlert in macOS Settings.",
       imageSrc: "/install-guide/step-5-notification-settings.png",
       imageAlt: "macOS notification settings for runAlert",
     },
@@ -115,21 +111,18 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
   windows: [
     {
       eyebrow: "Step 1",
-      title: "Download the Windows beta",
-      body:
-        "Use the packaged EXE build from runalert.app. This path is being prepared for the same packaged-flow model as Mac.",
+      title: "Download runAlert",
+      body: "Click Download EXE.",
     },
     {
       eyebrow: "Step 2",
-      title: "Expect SmartScreen or publisher warnings",
-      body:
-        "Windows may warn that the beta is from an unknown publisher until signing is added. We will test and tighten this path on the Windows machine phase.",
+      title: "Open the installer",
+      body: "Run the installer and follow the prompts.",
     },
     {
       eyebrow: "Step 3",
-      title: "Turn on notifications after install",
-      body:
-        "After install, confirm Windows notifications are enabled so runAlert can surface alerts reliably in the background.",
+      title: "Turn on notifications",
+      body: "Turn on notifications for runAlert in Windows.",
     },
   ],
 };
@@ -243,6 +236,21 @@ function defaultQuietSpan(): QuietSpanDraft {
   };
 }
 
+function stripLegacyForsenConfig(config: Config): Config {
+  const next = structuredClone(config);
+  const agent = next.agent as ({ autoUpdate?: boolean } & {
+    forsenOcr?: boolean;
+  }) | null | undefined;
+  if (!agent || !Object.prototype.hasOwnProperty.call(agent, "forsenOcr")) {
+    return next;
+  }
+  delete agent.forsenOcr;
+  if (!Object.keys(agent).length) {
+    delete next.agent;
+  }
+  return next;
+}
+
 function App() {
   const desktopApp = isDesktopApp();
   const [showSettings, setShowSettings] = useState(false);
@@ -315,13 +323,34 @@ function App() {
     Record<string, { avatarUrl: string | null; twitch?: string | null }>
   >({});
 
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [dragCandidate, setDragCandidate] = useState<{
+    index: number;
+    name: string;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [dragState, setDragState] = useState<{
+    index: number;
+    name: string;
+    x: number;
+    y: number;
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    height: number;
+    insertIndex: number;
+  } | null>(null);
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratingDraftRef = useRef(false);
   const queuedSaveRef = useRef(false);
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const suppressOpenRef = useRef(false);
   const browserAlertDedupeRef = useRef<
     Record<string, { runId: number | null; milestones: Record<string, boolean> }>
   >({});
@@ -356,6 +385,7 @@ function App() {
   const macAppDownloadUrl = `${appDownloadBase}/download/macos/dmg`;
   const macAppZipUrl = `${appDownloadBase}/download/macos/zip`;
   const windowsAppDownloadUrl = `${appDownloadBase}/download/windows/exe`;
+  const streamers: string[] = cfg?.streamers ?? [];
 
   const milestoneEntries = Object.entries(draft);
   const anyMilestones = milestoneEntries.length > 0;
@@ -365,7 +395,11 @@ function App() {
   const notificationsEnabled = cfg?.notifications?.enabled ?? true;
   const notificationSoundEnabled = cfg?.notifications?.sound ?? true;
   const agentAutoUpdateEnabled = cfg?.agent?.autoUpdate ?? false;
-  const forsenOcrEnabled = cfg?.agent?.forsenOcr ?? false;
+  const backgroundMonitoringEnabled = cfg?.agent?.backgroundMonitoring ?? false;
+
+  function applyConfig(next: Config) {
+    setCfg(stripLegacyForsenConfig(next));
+  }
 
   function getTwitchUrl(name: string) {
     const raw =
@@ -471,9 +505,11 @@ function App() {
       enabled,
       sound,
     };
-    setCfg(updated);
+    applyConfig(updated);
     setErr(null);
-    void putConfig(updated).catch((e) => setErr(e?.message ?? String(e)));
+    void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
+      setErr(e?.message ?? String(e))
+    );
   }
 
   function toggleNotificationsEnabled(next: boolean) {
@@ -482,6 +518,21 @@ function App() {
 
   function toggleNotificationSound(next: boolean) {
     updateNotificationPrefs({ sound: next });
+  }
+
+  function updateBackgroundMonitoring(next: boolean) {
+    if (!cfg) return;
+    const updated = structuredClone(cfg);
+    updated.agent = {
+      ...(updated.agent || {}),
+      autoUpdate: updated.agent?.autoUpdate ?? agentAutoUpdateEnabled,
+      backgroundMonitoring: next,
+    };
+    applyConfig(updated);
+    setErr(null);
+    void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
+      setErr(e?.message ?? String(e))
+    );
   }
 
   function dismissOnboarding() {
@@ -703,22 +754,22 @@ function App() {
     // Optimistic UI update
     const optimistic: Config = structuredClone(cfg);
     optimistic.streamers = [...(optimistic.streamers ?? []), name];
-    setCfg(optimistic);
+    applyConfig(optimistic);
     setErr(null);
 
     // Close modal immediately for a snappy feel
     setShowAddStreamer(false);
 
     try {
-      const saved = await putConfig(optimistic);
-      setCfg(saved);
+      const saved = await putConfig(stripLegacyForsenConfig(optimistic));
+      applyConfig(saved);
       void trackEvent("streamer_added", { streamer: name });
     } catch (e: any) {
       setErr(e?.message ?? String(e));
       // Roll back to canonical config if save fails
       try {
         const latest = await getConfig();
-        setCfg(latest);
+        applyConfig(latest);
       } catch {
         // keep existing error
       }
@@ -749,7 +800,7 @@ function App() {
     if (optimistic.profiles?.[name]) {
       delete optimistic.profiles[name];
     }
-    setCfg(optimistic);
+    applyConfig(optimistic);
     setErr(null);
 
     // Close the panel if this streamer was selected
@@ -758,15 +809,15 @@ function App() {
     }
 
     try {
-      const saved = await putConfig(optimistic);
-      setCfg(saved);
+      const saved = await putConfig(stripLegacyForsenConfig(optimistic));
+      applyConfig(saved);
       void trackEvent("streamer_removed", { streamer: name });
     } catch (e: any) {
       setErr(e?.message ?? String(e));
       // Roll back to canonical config if save fails
       try {
         const latest = await getConfig();
-        setCfg(latest);
+        applyConfig(latest);
       } catch {
         // keep existing error
       }
@@ -775,7 +826,7 @@ function App() {
 
   useEffect(() => {
     getConfig()
-      .then(setCfg)
+      .then(applyConfig)
       .catch((e) => setErr(e?.message ?? String(e)));
   }, []);
 
@@ -920,8 +971,8 @@ function App() {
         };
       }
 
-      const saved = await putConfig(next);
-      setCfg(saved);
+      const saved = await putConfig(stripLegacyForsenConfig(next));
+      applyConfig(saved);
       void trackEvent("milestone_edited", {
         streamer: selected,
         reason,
@@ -968,34 +1019,210 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, selected]);
 
-  const streamers: string[] = cfg?.streamers ?? [];
+  useEffect(() => {
+    if (!dragCandidate && !dragState) return;
 
-  const reorderStreamers = (fromIdx: number, toIdx: number) => {
-    if (!cfg || fromIdx === toIdx) return;
-    const next = [...(cfg.streamers ?? [])];
+    function handlePointerMove(e: PointerEvent) {
+      if (dragState) {
+        setDragState((cur) =>
+          cur
+            ? {
+                ...cur,
+                x: e.clientX,
+                y: e.clientY,
+                insertIndex: getDragInsertIndex(
+                  e.clientX,
+                  e.clientY,
+                  cur.index
+                ),
+              }
+            : cur
+        );
+        return;
+      }
+
+      if (!dragCandidate) return;
+      const moved = Math.hypot(
+        e.clientX - dragCandidate.startX,
+        e.clientY - dragCandidate.startY
+      );
+      if (moved < 8) return;
+
+      suppressOpenRef.current = true;
+      setDragState({
+        index: dragCandidate.index,
+        name: dragCandidate.name,
+        x: e.clientX,
+        y: e.clientY,
+        offsetX: dragCandidate.offsetX,
+        offsetY: dragCandidate.offsetY,
+        width: dragCandidate.width,
+        height: dragCandidate.height,
+        insertIndex: getDragInsertIndex(
+          e.clientX,
+          e.clientY,
+          dragCandidate.index
+        ),
+      });
+      setDragCandidate(null);
+    }
+
+    function finishDrag() {
+      setDragState((cur) => {
+        if (cur) {
+          reorderStreamers(cur.index, cur.insertIndex);
+        }
+        return null;
+      });
+      if (dragCandidate || dragState) {
+        window.setTimeout(() => {
+          suppressOpenRef.current = false;
+        }, 0);
+      }
+      setDragCandidate(null);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointercancel", finishDrag);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishDrag);
+      window.removeEventListener("pointercancel", finishDrag);
+    };
+  }, [dragCandidate, dragState, streamers]);
+
+  function getReorderedStreamers(
+    fromIdx: number,
+    insertIndex: number,
+    names: string[]
+  ) {
+    const next = [...names];
+    if (fromIdx < 0 || fromIdx >= next.length) return next;
+    const clampedInsert = Math.max(0, Math.min(next.length, insertIndex));
+    const targetIdx = clampedInsert > fromIdx ? clampedInsert - 1 : clampedInsert;
+    if (targetIdx === fromIdx) return next;
     const [moved] = next.splice(fromIdx, 1);
-    next.splice(toIdx, 0, moved);
+    next.splice(targetIdx, 0, moved);
+    return next;
+  }
+
+  const reorderStreamers = (fromIdx: number, insertIndex: number) => {
+    if (!cfg) return;
+    const current = cfg.streamers ?? [];
+    const next = getReorderedStreamers(fromIdx, insertIndex, current);
+    if (next.every((name, idx) => name === current[idx])) return;
     const updated = { ...cfg, streamers: next };
-    setCfg(updated);
-    void putConfig(updated).catch((e) => setErr(e?.message ?? String(e)));
+    applyConfig(updated);
+    void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
+      setErr(e?.message ?? String(e))
+    );
   };
 
   const quietHoursSummary = formatQuietHoursSummary(cfg?.quietHours);
-  const desktopNotificationsSummary = notificationsEnabled
-    ? `On · Sound ${notificationSoundEnabled ? "on" : "off"}`
-    : "Off";
-  const browserAlertsSummary = browserAlertsEnabled
-    ? `On · Sound ${notificationSoundEnabled ? "on" : "off"}`
-    : "Off";
-  const backgroundSummary = desktopApp
-    ? "Runs after window close"
-    : "Desktop app feature";
+  const desktopNotificationsSummary = notificationsEnabled ? "On" : "Off";
+  const browserAlertsSummary = browserAlertsEnabled ? "On" : "Off";
+  const backgroundSummary = backgroundMonitoringEnabled ? "On" : "Off";
   const installGuide = INSTALL_GUIDES[installGuidePlatform];
   const activeInstallStep = installGuide[installGuideStep] ?? installGuide[0];
   const guidePrimaryUrl =
     installGuidePlatform === "mac" ? macAppDownloadUrl : windowsAppDownloadUrl;
   const guidePrimaryLabel =
     installGuidePlatform === "mac" ? "Download DMG" : "Download EXE";
+
+  function setTileRef(name: string, node: HTMLDivElement | null) {
+    tileRefs.current[name] = node;
+  }
+
+  function getOrderedTileRects() {
+    return streamers.map(
+      (name) => tileRefs.current[name]?.getBoundingClientRect() ?? null
+    );
+  }
+
+  function getDragInsertIndex(
+    clientX: number,
+    clientY: number,
+    fallback: number
+  ) {
+    const rects = getOrderedTileRects();
+    let bestIndex = fallback;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    rects.forEach((rect, idx) => {
+      if (!rect) return;
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = clientX - cx;
+      const dy = clientY - cy;
+      const distance = dx * dx + dy * dy;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = idx;
+      }
+    });
+
+    const nearestRect = rects[bestIndex];
+    if (!nearestRect) return fallback;
+    const centerX = nearestRect.left + nearestRect.width / 2;
+    const centerY = nearestRect.top + nearestRect.height / 2;
+    const before =
+      Math.abs(clientY - centerY) > Math.abs(clientX - centerX)
+        ? clientY < centerY
+        : clientX < centerX;
+    const rawInsertIndex = before ? bestIndex : bestIndex + 1;
+    return Math.max(0, Math.min(streamers.length, rawInsertIndex));
+  }
+
+  function getTilePreviewStyle(
+    name: string,
+    idx: number
+  ): React.CSSProperties | undefined {
+    if (!dragState || idx === dragState.index) return undefined;
+
+    const rects = getOrderedTileRects();
+    const sourceRect = rects[idx];
+    if (!sourceRect) return undefined;
+
+    const previewNames = getReorderedStreamers(
+      dragState.index,
+      dragState.insertIndex,
+      streamers
+    );
+    const previewIndex = previewNames.indexOf(name);
+    const targetRect = rects[previewIndex];
+    if (!targetRect) return undefined;
+
+    const dx = targetRect.left - sourceRect.left;
+    const dy = targetRect.top - sourceRect.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return undefined;
+
+    return {
+      transform: `translate(${dx}px, ${dy}px)`,
+      zIndex: 3,
+    };
+  }
+
+  function beginPointerDrag(
+    e: React.PointerEvent<HTMLButtonElement>,
+    index: number,
+    name: string
+  ) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setDragCandidate({
+      index,
+      name,
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+    });
+  }
 
   function getNetherCutoffSec(name: string): number | null {
     if (!cfg) return null;
@@ -1222,7 +1449,14 @@ function App() {
                     Minecraft Speedrun Notifier
                   </h1>
                   <div className="metaRow" data-testid="header-meta">
-                    <a className="tag" href="https://github.com/jz-42/runAlert" target="_blank" rel="noopener noreferrer">{APP_CHANNEL} <span className="tagVersion">v{APP_VERSION}</span></a>
+                    <a
+                      className="tag"
+                      href="https://github.com/jz-42/runAlert"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {APP_CHANNEL}
+                    </a>
                     <span className="metaWarn">⚠ Possible bugs</span>
                   </div>
                 </div>
@@ -1262,7 +1496,6 @@ function App() {
                               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
                             )}
                           </button>
-                          {notificationsEnabled ? (
                           <button
                             type="button"
                             className={`utilityIconBtn ${
@@ -1283,7 +1516,6 @@ function App() {
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
                             )}
                           </button>
-                          ) : null}
                         </div>
                       </div>
 
@@ -1322,9 +1554,33 @@ function App() {
                           onClick={() => setShowAgentSettings(true)}
                           aria-label="Open background monitoring settings"
                         >
-                          <span className="utilityEyebrow">Background</span>
+                          <span className="utilityEyebrow">Background Monitoring</span>
                           <span className="utilityValue">{backgroundSummary}</span>
                         </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${
+                              backgroundMonitoringEnabled
+                                ? "radar-on"
+                                : "radar-off"
+                            }`}
+                            aria-label={
+                              backgroundMonitoringEnabled
+                                ? "Disable background monitoring"
+                                : "Enable background monitoring"
+                            }
+                            onClick={() =>
+                              updateBackgroundMonitoring(!backgroundMonitoringEnabled)
+                            }
+                          >
+                            {backgroundMonitoringEnabled ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><path d="M12 5.5a6.5 6.5 0 0 1 6.5 6.5"/><path d="M12 2.5A9.5 9.5 0 0 1 21.5 12"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><path d="M12 4.5A7.5 7.5 0 0 1 19.5 12"/></svg>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </>
                   ) : (
@@ -1372,7 +1628,6 @@ function App() {
                               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
                             )}
                           </button>
-                          {browserAlertsEnabled ? (
                           <button
                             type="button"
                             className={`utilityIconBtn ${
@@ -1393,7 +1648,6 @@ function App() {
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
                             )}
                           </button>
-                          ) : null}
                         </div>
                       </div>
 
@@ -1506,8 +1760,8 @@ function App() {
               >
                 Paceman
               </a>{" "}
-              split times can drift vs in-VOD IGT. Add a small buffer (about a
-              minute) to your thresholds for safety.
+              split times can drift vs real IGT. Add a small buffer to your
+              thresholds for safety.
             </div>
 
             <div className="milestoneAllRow">
@@ -1707,27 +1961,31 @@ function App() {
         <div className="grid">
           {streamers.map((name, idx) => (
             <div
-              className={`avatarTile${dragIdx === idx ? " dragging" : ""}${dragOverIdx === idx ? " dragOver" : ""}`}
+              className={`avatarTile${
+                dragState?.index === idx ? " dragOrigin" : ""
+              }`}
               key={name}
-              draggable
-              onDragStart={() => setDragIdx(idx)}
-              onDragOver={(e) => { e.preventDefault(); setDragOverIdx(idx); }}
-              onDragLeave={() => { if (dragOverIdx === idx) setDragOverIdx(null); }}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragIdx !== null) reorderStreamers(dragIdx, idx);
-                setDragIdx(null);
-                setDragOverIdx(null);
-              }}
-              onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+              ref={(node) => setTileRef(name, node)}
+              style={getTilePreviewStyle(name, idx)}
             >
-              <button className="avatarBtn" onClick={() => setSelected(name)}>
+              <button
+                className="avatarBtn"
+                type="button"
+                draggable={false}
+                onPointerDown={(e) => beginPointerDrag(e, idx, name)}
+                onClick={() => {
+                  if (suppressOpenRef.current || dragCandidate || dragState)
+                    return;
+                  setSelected(name);
+                }}
+              >
                 {getAvatarSrc(name) ? (
                   <img
                     className="avatarImg"
                     alt={`${name} avatar`}
                     src={getAvatarSrc(name)!}
                     loading="lazy"
+                    draggable={false}
                   />
                 ) : null}
                 {getBadgeData(name) ? (
@@ -1783,6 +2041,45 @@ function App() {
           </div>
         </div>
 
+        {dragState ? (
+          <div
+            className="avatarDragOverlay"
+            style={{
+              transform: `translate(${dragState.x - dragState.offsetX}px, ${dragState.y - dragState.offsetY}px)`,
+              width: dragState.width,
+            }}
+          >
+            <div
+              className="avatarBtn"
+              style={{ width: dragState.width, height: dragState.height }}
+            >
+              {getAvatarSrc(dragState.name) ? (
+                <img
+                  className="avatarImg"
+                  alt={`${dragState.name} avatar`}
+                  src={getAvatarSrc(dragState.name)!}
+                  loading="lazy"
+                  draggable={false}
+                />
+              ) : null}
+              {getBadgeData(dragState.name) ? (
+                <span
+                  className={`milestoneBadge ${
+                    getBadgeData(dragState.name)!.className
+                  }`}
+                  aria-hidden="true"
+                >
+                  {milestoneBadgeText(getBadgeData(dragState.name)!.milestone)}
+                </span>
+              ) : null}
+            </div>
+            <div className="label">{dragState.name}</div>
+            <div className="milestoneSubtitle">
+              {subtitleFor(dragState.name) ?? "Last update • —"}
+            </div>
+          </div>
+        ) : null}
+
         <div className="bottomSpacer" />
 
         {!desktopApp ? (
@@ -1790,8 +2087,8 @@ function App() {
             <div className="downloadHubHeader">
               <div className="downloadHubTitle">Desktop app</div>
               <div className="downloadHubText">
-                Durable background alerts after the window is closed. Current
-                Mac and Windows beta builds are unsigned while testing.
+                Browser version only works with the tab open, download app for
+                full background notifications.
               </div>
             </div>
             <div className="downloadHubActions">
@@ -1840,6 +2137,7 @@ function App() {
             paceman.gg
           </a>
         </div>
+        <div className="pageVersion">v{APP_VERSION}</div>
 
         {showOnboarding ? (
           <div className="qhOverlay" onClick={dismissOnboarding}>
@@ -1876,30 +2174,51 @@ function App() {
                 </button>
               </div>
               <div className="onboardingGrid">
-                <div className="onboardingStep">
-                  <div className="onboardingStepTitle">Add streamers</div>
-                  <div className="onboardingStepText">
-                    Track Paceman-supported runners from the grid.
-                  </div>
-                </div>
-                <div className="onboardingStep">
-                  <div className="onboardingStepTitle">Set thresholds</div>
-                  <div className="onboardingStepText">
-                    Choose the split times that make a run worth opening.
-                  </div>
-                </div>
-                <div className="onboardingStep">
-                  <div className="onboardingStepTitle">Try it in this tab</div>
-                  <div className="onboardingStepText">
-                    Browser alerts work while this page stays open.
-                  </div>
-                </div>
-                <div className="onboardingStep">
-                  <div className="onboardingStepTitle">Download the app</div>
-                  <div className="onboardingStepText">
-                    The desktop app is for durable background alerts.
-                  </div>
-                </div>
+                {desktopApp ? (
+                  <>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">Add streamers</div>
+                      <div className="onboardingStepText">
+                        Pick the runners you want to watch.
+                      </div>
+                    </div>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">Allow notifications</div>
+                      <div className="onboardingStepText">
+                        So runAlert can alert you when a run matters.
+                      </div>
+                    </div>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">
+                        Optional: Background Monitoring
+                      </div>
+                      <div className="onboardingStepText">
+                        Want seamless alerts without reopening runAlert? Turn this on.
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">Add streamers</div>
+                      <div className="onboardingStepText">
+                        Pick the runners you want to watch.
+                      </div>
+                    </div>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">Turn on browser alerts</div>
+                      <div className="onboardingStepText">
+                        Allow alerts in this browser.
+                      </div>
+                    </div>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">Keep this tab open</div>
+                      <div className="onboardingStepText">
+                        Browser alerts work while this page stays open.
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="promptActions">
                 <button
@@ -1933,8 +2252,8 @@ function App() {
                       : "Install runAlert on Windows"}
                   </div>
                   <div className="qhHelp">
-                    Browser alerts are for trying runAlert in this tab. The
-                    desktop app is the durable background-alert path.
+                    Just follow these steps. You can open this guide again
+                    anytime.
                   </div>
                 </div>
                 <button
@@ -2098,7 +2417,7 @@ function App() {
                 </div>
 
                 <details className="installGuideAdvanced">
-                  <summary>Advanced install tools</summary>
+                  <summary>Need advanced install tools?</summary>
                   <div className="installGuideAdvancedBody">
                     <div className="installSteps">
                       Fallback scripts clone the public runAlert repo and run
@@ -2338,20 +2657,20 @@ function App() {
               className="qhModal"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
-              aria-label="Agent"
+              aria-label="Background monitoring"
             >
               <div className="qhHeader">
                 <div>
-                  <div className="qhTitle">Agent (Mac)</div>
+                  <div className="qhTitle">Background Monitoring</div>
                   <div className="qhHelp">
-                    Control background alerts and experimental features for the
-                    local agent.
+                    Keep runAlert in the background for seamless alerts, even
+                    after sleep or restart.
                   </div>
                 </div>
                 <button
                   type="button"
                   className="iconBtn iconBtn--close"
-                  aria-label="Close agent settings"
+                  aria-label="Close background monitoring settings"
                   onClick={() => setShowAgentSettings(false)}
                 >
                   <svg
@@ -2369,6 +2688,19 @@ function App() {
 
               <div className="notifBody">
                 <label className="notifRow">
+                  <span>Enable background monitoring</span>
+                  <input
+                    type="checkbox"
+                    checked={backgroundMonitoringEnabled}
+                    onChange={(e) => {
+                      updateBackgroundMonitoring(e.target.checked);
+                    }}
+                  />
+                </label>
+                <div className="notifNote">
+                  If you quit runAlert, this stops until you open it again.
+                </div>
+                <label className="notifRow">
                   <span>Auto‑update agent on launch</span>
                   <input
                     type="checkbox"
@@ -2380,43 +2712,19 @@ function App() {
                       updated.agent = {
                         ...(updated.agent || {}),
                         autoUpdate: next,
-                        forsenOcr:
-                          updated.agent?.forsenOcr ?? forsenOcrEnabled,
+                        backgroundMonitoring: backgroundMonitoringEnabled,
                       };
-                      setCfg(updated);
+                      applyConfig(updated);
                       setErr(null);
-                      void putConfig(updated).catch((e) =>
-                        setErr(e?.message ?? String(e))
-                      );
-                    }}
-                  />
-                </label>
-                <label className="notifRow">
-                  <span>Forsen OCR (experimental)</span>
-                  <input
-                    type="checkbox"
-                    checked={forsenOcrEnabled}
-                    onChange={(e) => {
-                      const next = e.target.checked;
-                      if (!cfg) return;
-                      const updated = structuredClone(cfg);
-                      updated.agent = {
-                        ...(updated.agent || {}),
-                        autoUpdate:
-                          updated.agent?.autoUpdate ?? agentAutoUpdateEnabled,
-                        forsenOcr: next,
-                      };
-                      setCfg(updated);
-                      setErr(null);
-                      void putConfig(updated).catch((e) =>
+                      void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
                         setErr(e?.message ?? String(e))
                       );
                     }}
                   />
                 </label>
                 <div className="notifNote">
-                  Forsen OCR requires the Mac agent and is opt‑in. It may use
-                  extra CPU/bandwidth.
+                  <span className="inlineBadge">Quit</span>
+                  <span>Fully stops seamless background alerts.</span>
                 </div>
               </div>
             </div>
@@ -2684,8 +2992,10 @@ function App() {
                         try {
                           const next = structuredClone(cfg);
                           next.quietHours = v.ranges;
-                          const saved = await putConfig(next);
-                          setCfg(saved);
+                          const saved = await putConfig(
+                            stripLegacyForsenConfig(next)
+                          );
+                          applyConfig(saved);
                           setShowQuietHours(false);
                         } catch (e: any) {
                           setQuietErr(e?.message ?? String(e));

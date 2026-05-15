@@ -10,7 +10,7 @@
   },
   "agent": {
     "autoUpdate": true,
-    "forsenOcr": false
+    "backgroundMonitoring": false
   },
   "channels": [
     "desktop"

@@ -350,6 +350,236 @@ describe("App", () => {
     ).toBeTruthy();
   });
 
+  it("shows simplified desktop onboarding and background monitoring language", async () => {
+    (window as any).runAlertDesktop = { platform: "darwin" };
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: {},
+          profiles: {},
+          notifications: {
+            enabled: true,
+            sound: true,
+          },
+          agent: {
+            backgroundMonitoring: false,
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    expect(await screen.findByRole("dialog", { name: "Welcome to runAlert" })).toBeTruthy();
+    expect(screen.getByText("Add streamers")).toBeTruthy();
+    expect(screen.getByText("Allow notifications")).toBeTruthy();
+    expect(screen.getByText("Optional: Background Monitoring")).toBeTruthy();
+    expect(
+      screen.getByText(/Want seamless alerts without reopening runAlert\? Turn this on\./i)
+    ).toBeTruthy();
+    expect(screen.queryByText("Set thresholds")).toBeNull();
+    expect(screen.queryByText("Download the app")).toBeNull();
+  });
+
+  it("lets desktop users toggle background monitoring and open a simple explainer", async () => {
+    (window as any).runAlertDesktop = { platform: "darwin" };
+
+    const initialConfig = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: {},
+      profiles: {},
+      agent: {
+        autoUpdate: false,
+        backgroundMonitoring: false,
+      },
+    };
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      const u = String(url);
+      const method = options?.method || "GET";
+
+      if (u.includes("/config") && method === "GET") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => initialConfig,
+        };
+      }
+
+      if (u.includes("/config") && method === "PUT") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => JSON.parse(String(options?.body || "{}")),
+        };
+      }
+
+      if (u.includes("/profiles")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, profiles: {} }),
+        };
+      }
+
+      if (u.includes("/status")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, statuses: {} }),
+        };
+      }
+
+      if (u.includes("/twitch/status")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, statuses: {} }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch: ${u}`);
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    expect(screen.getByText("Background Monitoring")).toBeTruthy();
+    expect(screen.getByText("Off")).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("Enable background monitoring"));
+
+    await waitFor(() => {
+      const putCall = (globalThis.fetch as any).mock.calls.find(
+        ([url, options]: [string, RequestInit]) =>
+          String(url).includes("/config") && options?.method === "PUT"
+      );
+      expect(putCall).toBeTruthy();
+      expect(JSON.parse(String(putCall[1].body))).toMatchObject({
+        agent: {
+          autoUpdate: false,
+          backgroundMonitoring: true,
+        },
+      });
+    });
+
+    fireEvent.click(screen.getByLabelText("Open background monitoring settings"));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Background monitoring" })
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Keep runAlert in the background for seamless alerts, even after sleep or restart\./i
+      )
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/If you quit runAlert, this stops until you open it again\./i)
+    ).toBeTruthy();
+  });
+
+  it("removes the legacy forsen OCR control from background settings and strips it on save", async () => {
+    (window as any).runAlertDesktop = { platform: "darwin" };
+
+    const initialConfig = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: {},
+      profiles: {},
+      agent: {
+        autoUpdate: false,
+        forsenOcr: true,
+      },
+    };
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      const u = String(url);
+      const method = options?.method || "GET";
+
+      if (u.includes("/config") && method === "GET") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => initialConfig,
+        };
+      }
+
+      if (u.includes("/config") && method === "PUT") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => JSON.parse(String(options?.body || "{}")),
+        };
+      }
+
+      if (u.includes("/profiles")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, profiles: {} }),
+        };
+      }
+
+      if (u.includes("/status")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, statuses: {} }),
+        };
+      }
+
+      if (u.includes("/twitch/status")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, statuses: {} }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch: ${u}`);
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(
+      screen.getByLabelText("Open background monitoring settings")
+    );
+
+    expect(
+      await screen.findByRole("dialog", { name: "Background monitoring" })
+    ).toBeTruthy();
+    expect(screen.queryByText(/Forsen OCR/i)).toBeNull();
+
+    fireEvent.click(screen.getByLabelText(/Auto.?update agent on launch/i));
+
+    await waitFor(() => {
+      const putCall = (globalThis.fetch as any).mock.calls.find(
+        ([url, options]: [string, RequestInit]) =>
+          String(url).includes("/config") && options?.method === "PUT"
+      );
+      expect(putCall).toBeTruthy();
+      expect(JSON.parse(String(putCall[1].body))).toMatchObject({
+        agent: {
+          autoUpdate: true,
+        },
+      });
+      expect(JSON.parse(String(putCall[1].body)).agent).not.toHaveProperty(
+        "forsenOcr"
+      );
+    });
+  });
+
   it("does not render the live dot when local run status is active but hosted twitch status is offline", async () => {
     // @ts-expect-error - test mock
     globalThis.fetch = vi.fn(async (url: string) => {
@@ -533,7 +763,8 @@ describe("App", () => {
       name: "Welcome to runAlert",
     });
 
-    expect(within(dialog).getByText("Try it in this tab")).toBeTruthy();
+    expect(within(dialog).getByText("Turn on browser alerts")).toBeTruthy();
+    expect(within(dialog).getByText("Keep this tab open")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Got it" }));
 
     await waitFor(() => {

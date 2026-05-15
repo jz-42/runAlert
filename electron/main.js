@@ -2,12 +2,19 @@ const path = require("path");
 const {
   app,
   BrowserWindow,
+  dialog,
   Menu,
   Tray,
   nativeImage,
   shell,
 } = require("electron");
 const { DEFAULT_PORT } = require("./local_api");
+const {
+  applyBackgroundMonitoringSettings,
+  getBackgroundQuitDialogOptions,
+  readBackgroundMonitoringConfig,
+  shouldLaunchBackgroundOnly,
+} = require("./background_mode");
 const { startDesktopServices } = require("./desktop_services");
 
 const isDev =
@@ -20,9 +27,46 @@ let tray = null;
 let desktopServices = null;
 let apiUrl = `http://127.0.0.1:${DEFAULT_PORT}`;
 let isQuitting = false;
+let configPath = null;
+let backgroundMonitoringEnabled = false;
+let launchBackgroundOnly = false;
+let allowImmediateQuit = false;
 
 function bundledConfigPath() {
   return path.join(__dirname, "..", "config.json");
+}
+
+function syncDockVisibility() {
+  if (process.platform !== "darwin" || !app.dock) return;
+  const shouldHide =
+    backgroundMonitoringEnabled && (!mainWindow || !mainWindow.isVisible());
+  if (shouldHide) {
+    app.dock.hide();
+    return;
+  }
+  app.dock.show();
+}
+
+function syncBackgroundMonitoring() {
+  applyBackgroundMonitoringSettings({
+    appApi: app,
+    enabled: backgroundMonitoringEnabled,
+  });
+  syncDockVisibility();
+  if (tray) {
+    tray.setToolTip(
+      backgroundMonitoringEnabled
+        ? "runAlert • Background Monitoring On"
+        : "runAlert"
+    );
+  }
+}
+
+function refreshBackgroundMonitoringFromConfig() {
+  const next = readBackgroundMonitoringConfig(configPath);
+  if (next === backgroundMonitoringEnabled) return;
+  backgroundMonitoringEnabled = next;
+  syncBackgroundMonitoring();
 }
 
 function createMainWindow() {
@@ -43,7 +87,10 @@ function createMainWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
-    mainWindow.show();
+    if (!launchBackgroundOnly) {
+      mainWindow.show();
+    }
+    syncDockVisibility();
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -55,6 +102,15 @@ function createMainWindow() {
     if (isQuitting) return;
     event.preventDefault();
     mainWindow.hide();
+    syncDockVisibility();
+  });
+
+  mainWindow.on("show", () => {
+    syncDockVisibility();
+  });
+
+  mainWindow.on("hide", () => {
+    syncDockVisibility();
   });
 
   const rendererUrl = isDev ? rendererDevUrl : apiUrl;
@@ -63,10 +119,13 @@ function createMainWindow() {
 
 function showMainWindow() {
   if (!mainWindow) {
+    launchBackgroundOnly = false;
     createMainWindow();
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
+  launchBackgroundOnly = false;
+  syncDockVisibility();
   mainWindow.show();
   mainWindow.focus();
 }
@@ -83,16 +142,16 @@ function createTray() {
     { label: "Open runAlert", click: showMainWindow },
     { type: "separator" },
     {
-      label: "Keep running after window close",
+      label: "Background Monitoring",
       type: "checkbox",
-      checked: true,
+      checked: backgroundMonitoringEnabled,
       enabled: false,
     },
     { type: "separator" },
     {
       label: "Quit runAlert",
       click: () => {
-        isQuitting = true;
+        allowImmediateQuit = false;
         app.quit();
       },
     },
@@ -108,15 +167,47 @@ app.whenReady().then(async () => {
     bundledConfigPath: bundledConfigPath(),
   });
   apiUrl = desktopServices.apiUrl;
+  configPath = desktopServices.configPath;
+  backgroundMonitoringEnabled = readBackgroundMonitoringConfig(configPath);
+  const loginSettings = app.getLoginItemSettings();
+  launchBackgroundOnly = shouldLaunchBackgroundOnly({
+    enabled: backgroundMonitoringEnabled,
+    wasOpenedAtLogin: loginSettings?.wasOpenedAtLogin,
+    wasOpenedAsHidden: loginSettings?.wasOpenedAsHidden,
+  });
 
   createTray();
   createMainWindow();
+  syncBackgroundMonitoring();
 
   app.on("activate", showMainWindow);
+
+  if (configPath) {
+    require("fs").watchFile(configPath, { interval: 1000 }, () => {
+      refreshBackgroundMonitoringFromConfig();
+    });
+  }
 });
 
-app.on("before-quit", () => {
-  isQuitting = true;
+app.on("before-quit", async (event) => {
+  if (allowImmediateQuit || isQuitting) {
+    isQuitting = true;
+    return;
+  }
+  if (!backgroundMonitoringEnabled) {
+    isQuitting = true;
+    return;
+  }
+  event.preventDefault();
+  const result = await dialog.showMessageBox(
+    mainWindow || undefined,
+    getBackgroundQuitDialogOptions()
+  );
+  if (result.response === 1) {
+    allowImmediateQuit = true;
+    isQuitting = true;
+    app.quit();
+  }
 });
 
 app.on("window-all-closed", () => {
@@ -124,7 +215,14 @@ app.on("window-all-closed", () => {
 });
 
 app.on("quit", () => {
+  if (configPath) {
+    require("fs").unwatchFile(configPath);
+  }
   if (desktopServices) {
     desktopServices.stop();
   }
+});
+
+app.on("will-quit", () => {
+  isQuitting = true;
 });

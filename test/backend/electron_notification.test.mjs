@@ -41,6 +41,8 @@ describe("electron/electron_notification", () => {
       body: "Run 123",
       silent: false,
       icon: "/tmp/runalert-icon.png",
+      actions: [{ type: "button", text: "Open Stream" }],
+      closeButtonText: "Dismiss",
     });
     expect(shown[0].wasShown).toBe(true);
 
@@ -48,5 +50,8 @@ describe("electron/electron_notification", () => {
     expect(shell.openExternal).toHaveBeenCalledWith(
       "https://twitch.tv/xqcow"
     );
+
+    shown[0].handlers.action?.(null, 0);
+    expect(shell.openExternal).toHaveBeenCalledTimes(2);
   });
 });

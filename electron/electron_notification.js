@@ -32,11 +32,21 @@ async function sendElectronDesktop({
     body: String(message || ""),
     silent: !sound,
     icon: iconPath,
+    actions: openUrl ? [{ type: "button", text: "Open Stream" }] : [],
+    closeButtonText: openUrl ? "Dismiss" : undefined,
   });
 
   if (openUrl) {
-    notification.on("click", () => {
+    const openTarget = () => {
       shellApi.openExternal(String(openUrl));
+    };
+    notification.on("click", () => {
+      openTarget();
+    });
+    notification.on("action", (_event, index) => {
+      if (index === 0) {
+        openTarget();
+      }
     });
   }
 

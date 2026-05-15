@@ -154,17 +154,20 @@ h1{
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  min-height: 20px;
-  padding: 2px 8px;
-  border: 1px solid rgba(212, 172, 96, 0.35);
-  background: rgba(212, 172, 96, 0.14);
-  color: rgba(212, 172, 96, 0.95);
-  border-radius: 4px;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(212, 172, 96, 0.26);
+  background: rgba(212, 172, 96, 0.11);
+  color: rgba(246, 226, 176, 0.94);
+  border-radius: var(--r-pill);
   line-height: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 6px 16px rgba(0,0,0,0.18);
 }
 
 a.tag{
@@ -173,15 +176,8 @@ a.tag{
 }
 
 a.tag:hover{
-  border-color: rgba(212, 172, 96, 0.50);
-  background: rgba(212, 172, 96, 0.20);
-}
-
-.tagVersion{
-  font-size: 9px;
-  font-weight: 500;
-  opacity: 0.65;
-  text-transform: none;
+  border-color: rgba(236, 196, 116, 0.42);
+  background: rgba(212, 172, 96, 0.18);
 }
 
 .brandRow{
@@ -215,8 +211,8 @@ a.tag:hover{
   top: 50%;
   left: 50%;
   transform: translate(-52%, -48%);
-  width: 280%;
-  height: 280%;
+  width: 262%;
+  height: 262%;
   background-image: url("/title-art.png");
   background-repeat: no-repeat;
   background-size: contain;
@@ -254,15 +250,28 @@ a.tag:hover{
   letter-spacing: 0.01em;
 }
 
+.pageVersion{
+  position: fixed;
+  right: clamp(18px, 2.2vw, 28px);
+  bottom: clamp(14px, 2vw, 22px);
+  color: rgba(221, 191, 120, 0.58);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  z-index: 2;
+}
+
 /* ── Pills / Tags ────────────────────────────────────────── */
 
 .utilityRow{
-  margin-top: 16px;
+  margin-top: 10px;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   align-self: stretch;
   justify-content: flex-start;
+  transform: translateY(-2px);
 }
 
 .utilityCard{
@@ -359,6 +368,18 @@ a.tag:hover{
   background: rgba(255,255,255,0.03);
 }
 
+.utilityIconBtn.radar-on{
+  border-color: rgba(114, 214, 182, 0.24);
+  color: rgba(142, 229, 201, 0.96);
+  background: rgba(78, 188, 153, 0.10);
+}
+
+.utilityIconBtn.radar-off{
+  border-color: rgba(255,255,255,0.09);
+  color: rgba(181, 189, 204, 0.58);
+  background: rgba(255,255,255,0.03);
+}
+
 .utilityIconBtn:hover{
   border-color: rgba(255,255,255,0.18);
 }
@@ -385,20 +406,6 @@ a.tag:hover{
 @media (prefers-reduced-motion: reduce){
   .appTitle{ animation: none; }
   .appTitle:hover{ animation: none; }
-}
-
-.tag{
-  min-height: 26px;
-  padding: 0 10px;
-  border-radius: var(--r-pill);
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid rgba(212, 172, 96, 0.14);
-  background: rgba(212, 172, 96, 0.05);
-  color: rgba(212, 172, 96, 0.65);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
 }
 
 .sub{
@@ -431,9 +438,9 @@ a.tag:hover{
 }
 
 .settingsGear{
-  position: fixed;
-  top: clamp(16px, 2vw, 28px);
-  right: clamp(16px, 2vw, 28px);
+  position: absolute;
+  top: 4px;
+  right: 0;
   z-index: 10;
 }
 
@@ -510,6 +517,40 @@ a.tag:hover{
   flex-direction: column;
   align-items: center;
   gap: 10px;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.avatarTile.dragOrigin{
+  opacity: 0.10;
+  transform: scale(0.955);
+}
+
+.avatarDragOverlay{
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  filter: drop-shadow(0 22px 36px rgba(0,0,0,0.46));
+}
+
+.avatarDragOverlay .avatarBtn{
+  transform: rotate(-2deg) scale(1.04);
+  border-color: rgba(212, 172, 96, 0.3);
+  box-shadow: 0 18px 42px rgba(0,0,0,0.42);
+}
+
+.avatarDragOverlay .label{
+  color: rgba(236, 239, 246, 0.92);
+}
+
+.avatarDragOverlay .milestoneSubtitle{
+  color: rgba(220, 224, 234, 0.62);
+  background: rgba(9, 9, 14, 0.42);
 }
 
 .avatarBtn{
@@ -522,8 +563,9 @@ a.tag:hover{
   z-index: 0;
   isolation: isolate;
   box-shadow: 0 6px 20px rgba(0,0,0,0.30);
-  cursor: pointer;
+  cursor: grab;
   overflow: hidden;
+  touch-action: none;
   transition:
     transform 160ms cubic-bezier(0.2, 0.9, 0.2, 1),
     box-shadow 160ms ease,
@@ -559,6 +601,11 @@ a.tag:hover{
 .avatarBtn:active{
   transform: translateY(0) scale(0.98);
   box-shadow: 0 4px 14px rgba(0,0,0,0.36);
+}
+
+.avatarTile.dragOrigin .avatarBtn,
+.avatarDragOverlay .avatarBtn{
+  cursor: grabbing;
 }
 
 .avatarImg{
@@ -749,7 +796,7 @@ a.tag:hover{
 /* ── Drift note ──────────────────────────────────────────── */
 
 .driftNote{
-  margin-top: 4px;
+  margin-top: 8px;
   color: rgba(220, 224, 234, 0.44);
   font-size: 12px;
   line-height: 1.45;
@@ -1159,14 +1206,14 @@ a.tag:hover{
 
 .installGuideTitle{
   color: rgba(236, 239, 246, 0.92);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
 }
 
 .installGuideBody{
   color: rgba(205, 210, 222, 0.78);
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .installGuideActions{
@@ -1366,6 +1413,168 @@ a.tag:hover{
   color: rgba(255,255,255,0.18);
 }
 
+.milestonePanel{
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(19, 19, 24, 0.96);
+  box-shadow: 0 16px 36px rgba(0,0,0,0.28);
+}
+
+.milestonePanelHeader{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.milestonePanelActions{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.milestonePanelFooter{
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.milestoneLabel{
+  font-size: 18px;
+}
+
+.milestoneCheck{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #bdbdbd;
+}
+
+.milestoneGrid{
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.configError{
+  color: #ff6b6b;
+  margin-top: 12px;
+}
+
+.loadingText{
+  margin-top: 12px;
+  color: #999;
+}
+
+.statusWarn{
+  margin-top: 6px;
+  color: #ffb86b;
+  font-size: 14px;
+}
+
+.modalBtn{
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: rgba(236, 239, 246, 0.88);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.modalBtn:hover{
+  border-color: rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.08);
+}
+
+.modalBtn:active{
+  transform: scale(0.98);
+}
+
+.modalBtn--danger{
+  border-color: rgba(255, 100, 100, 0.16);
+  background: rgba(255, 100, 100, 0.08);
+  color: rgba(255, 220, 220, 0.9);
+}
+
+.modalBtn--danger:hover{
+  border-color: rgba(255, 100, 100, 0.28);
+  background: rgba(255, 100, 100, 0.12);
+}
+
+.modalBtn--save{
+  border-color: rgba(120,255,120,0.25);
+  background: rgba(120,255,120,0.12);
+}
+
+.settingsOverlay{
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 74px clamp(16px, 2vw, 28px) 24px;
+  background: rgba(0,0,0,0.2);
+  z-index: 45;
+}
+
+.settingsPanel{
+  position: relative;
+  width: min(320px, calc(100vw - 32px));
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(16, 16, 20, 0.98);
+  box-shadow: 0 18px 36px rgba(0,0,0,0.34);
+  border: 1px solid rgba(255,255,255,0.09);
+  z-index: 46;
+}
+
+.settingsHeader{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settingsTitle{
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.settingsMenu{
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.settingsMenuBtn{
+  min-height: 40px;
+  padding: 0 13px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: rgba(236, 239, 246, 0.88);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.settingsMenuBtn:hover{
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+}
+
 /* ── Modals (qh = shared modal primitive) ────────────────── */
 
 .qhOverlay{
@@ -1470,6 +1679,28 @@ a.tag:hover{
 .notifNote{
   font-size: 12px;
   color: rgba(255,255,255,0.45);
+}
+
+.notifNote + .notifRow{
+  margin-top: 4px;
+}
+
+.inlineBadge{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 20px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.05);
+  color: rgba(236, 239, 246, 0.78);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .notifPreviewShot{
