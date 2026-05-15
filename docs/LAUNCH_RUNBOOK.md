@@ -99,6 +99,11 @@ Ship if:
 - Windows is either verified enough for beta or clearly labeled as secondary
 - trust copy is honest
 
+Public framing:
+
+- safest same-day framing is `public beta`, `Mac-first`
+- only mention Windows as available if the Windows build and smoke test are done
+
 Hold if:
 
 - live Mac flow still has confusing friction

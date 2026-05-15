@@ -15,12 +15,17 @@ Ship a public beta that is honest, usable, and narrow:
 Do not post publicly until all of these are done:
 
 - [ ] hosted browser config persistence is confirmed
+- [ ] basic analytics are live and verified
 - [ ] live Mac install flow is sanity-checked from the real site
 - [ ] packaged alerts + quiet hours are sanity-checked
 - [ ] background monitoring is sanity-checked
-- [ ] basic analytics are live and verified
 - [ ] trust/safety language is finalized
 - [ ] Windows is either tested enough for beta or clearly framed as secondary
+
+Public-post rule:
+
+- if Mac is clean and metrics are live, a Mac-first beta post is acceptable
+- do not claim Windows support unless the Windows build and smoke test are done
 
 ## Current Reality
 
@@ -92,6 +97,12 @@ Tasks:
   - background monitoring
   - quit behavior
 
+Ship threshold for this phase:
+
+- no blocker in install flow
+- no blocker in alert flow
+- no confusing background-monitoring failure
+
 ### Phase 3: Windows Build
 
 Estimated time: `30-60 min`
@@ -135,6 +146,11 @@ Tasks:
   - notifications
   - quiet hours
 
+Fallback:
+
+- if Windows build or smoke test slips, ship publicly as Mac-first beta and say
+  Windows is still being validated
+
 ### Phase 5: Final Trust And Public Copy
 
 Estimated time: `20-30 min`
@@ -152,6 +168,17 @@ Tasks:
   - source is public
   - current Mac build is unsigned
   - Windows status is accurate
+
+## Deferred On Purpose
+
+Not required before the public beta post:
+
+- Apple signing/notarization
+- Windows code signing
+- update-awareness UI
+- deeper analytics cleanup beyond basic live verification
+- extra UI polish beyond blocker fixes
+- broader metrics dashboards or funnels
 
 ## Trust And Security
 
@@ -179,16 +206,6 @@ Do not say:
 - that AI review guarantees safety
 - that unsigned means unsafe
 - that the app is signed/notarized if it is not
-
-## Not A Blocker Today
-
-Do not let these delay the beta:
-
-- Apple signing/notarization
-- Windows code signing
-- update-awareness UI
-- deeper analytics cleanup beyond basic live verification
-- broad visual redesign
 
 ## Useful Commands
 

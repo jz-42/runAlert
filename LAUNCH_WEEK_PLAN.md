@@ -12,6 +12,11 @@ Canonical plan: [docs/EXECUTION_PLAN.md](/Users/JerryZhan/runAlert/docs/EXECUTIO
 6. run Windows smoke test
 7. finalize public-post trust copy
 
+Public-post rule:
+
+- if Mac is clean and metrics are live, a Mac-first beta post is acceptable
+- if Windows is not done, say that plainly and do not overclaim parity
+
 ## Concrete Phases
 
 ### Phase 1: Hosted State + Metrics
@@ -30,6 +35,7 @@ Estimated time: `30-60 min`
 - real-site download
 - install
 - alert / quiet-hours / background-monitoring sanity
+- ship only if there is no blocker in install or alert flow
 
 ### Phase 3: Windows Build + Activation
 
@@ -40,6 +46,7 @@ Estimated time: `50-100 min`
 - set Render Windows URL
 - verify download
 - smoke test installer/app
+- if this slips, keep public framing Mac-first
 
 ### Phase 4: Final Public Copy
 
@@ -48,6 +55,14 @@ Estimated time: `20-30 min`
 - release notes
 - Reddit/public post
 - trust/safety framing
+
+## Deferred On Purpose
+
+- Apple signing/notarization
+- Windows code signing
+- update-awareness UI
+- deeper analytics cleanup beyond basic launch visibility
+- extra non-blocking polish
 
 ## Launch Truths
 
