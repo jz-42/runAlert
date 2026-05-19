@@ -25,6 +25,7 @@ dashboard/node_modules/
 .env
 .env.*
 **/CONTEXT.md
+CONTEXT_EXPORT*.md
 
 # Build output and caches
 dist-app/

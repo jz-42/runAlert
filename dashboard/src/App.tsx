@@ -277,14 +277,14 @@ function formatQuietHoursSummary(q: Config["quietHours"]): string {
     parts.push(`${formatTime12(d.start)}–${formatTime12(d.end)}`);
   }
   if (!parts.length) return "None";
-  return parts.join(", ");
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} +${parts.length - 1}`;
 }
 
 function defaultQuietSpan(): QuietSpanDraft {
-  // A reasonable starting point (common DND pattern).
   return {
-    start: { hh: "9", mm: "00", ampm: "PM" },
-    end: { hh: "9", mm: "00", ampm: "AM" },
+    start: { hh: "10", mm: "00", ampm: "PM" },
+    end: { hh: "7", mm: "00", ampm: "AM" },
   };
 }
 
@@ -342,6 +342,7 @@ function App() {
   const [quietDraft, setQuietDraft] = useState<QuietSpanDraft[]>([]);
   const [quietErr, setQuietErr] = useState<string | null>(null);
   const [quietSaving, setQuietSaving] = useState(false);
+  const [confirmRemoveQH, setConfirmRemoveQH] = useState<number | null>(null);
   const [statusByName, setStatusByName] = useState<
     Record<
       string,
@@ -1768,7 +1769,8 @@ function App() {
         ) : null}
 
         {selected && cfg ? (
-          <div className="milestonePanel">
+          <div className="qhOverlay" onClick={() => setSelected(null)}>
+          <div className="milestonePanel" onClick={(e) => e.stopPropagation()}>
             <div className="milestonePanelHeader">
               <a
                 className={`label labelLink labelRow panelName ${
@@ -1790,16 +1792,25 @@ function App() {
               </a>
               <div className="milestonePanelActions">
                 <button
-                  className="modalBtn modalBtn--danger"
+                  type="button"
+                  className="removeStreamerBtn"
+                  aria-label="Remove streamer"
+                  title="Remove streamer"
                   onClick={() => removeStreamer(selected)}
                 >
-                  Remove
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                    <path d="M4.5 2H11.5M2 4H14M12.667 4L12.111 12.067C12.048 12.956 11.296 13.667 10.405 13.667H5.595C4.704 13.667 3.952 12.956 3.889 12.067L3.333 4M6.333 7.333V10.667M9.667 7.333V10.667" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </button>
                 <button
-                  className="modalBtn"
+                  type="button"
+                  className="closeStreamerBtn"
+                  aria-label="Close"
                   onClick={() => setSelected(null)}
                 >
-                  Close
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z" fill="currentColor"/>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -1817,7 +1828,7 @@ function App() {
             </div>
 
             <div className="milestoneAllRow">
-              <div>All milestones</div>
+              <span className="milestoneAllLabel">All milestones</span>
               <label className="milestoneAllToggle">
                 <input
                   type="checkbox"
@@ -1836,7 +1847,6 @@ function App() {
                     });
                   }}
                 />
-                {allToggleOn ? "all on" : "all off"}
               </label>
             </div>
 
@@ -1859,7 +1869,104 @@ function App() {
                     </div>
 
                     <div className="milestoneControls">
-                      <label className="milestoneCheck">
+                      <div className="timeInputs">
+                        <span className="timePrefix">&le;</span>
+
+                        <input
+                          type="number"
+                          aria-label={`${milestone}-minutes`}
+                          value={mm}
+                          placeholder="0"
+                          min={0}
+                          step={1}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const cur = draft[milestone]?.thresholdSec;
+                            const curMm =
+                              typeof cur === "number"
+                                ? Math.floor(cur / 60)
+                                : 0;
+                            const curSs =
+                              typeof cur === "number" ? cur % 60 : 0;
+
+                            const nextMm =
+                              raw === ""
+                                ? undefined
+                                : clampInt(Number(raw), 0, 9999);
+                            const nextSec =
+                              nextMm == null && raw === "" && ss === ""
+                                ? undefined
+                                : (nextMm ?? curMm) * 60 + curSs;
+
+                            setDraft((d) => ({
+                              ...d,
+                              [milestone]: {
+                                ...d[milestone],
+                                thresholdSec: nextSec,
+                              },
+                            }));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            if (autosaveTimerRef.current)
+                              clearTimeout(autosaveTimerRef.current);
+                            autosaveTimerRef.current = null;
+                            void persistDraft("manual");
+                          }}
+                          className="timeField"
+                        />
+                        <span className="timeUnit">m</span>
+
+                        <span className="timeColon">:</span>
+
+                        <input
+                          type="number"
+                          aria-label={`${milestone}-seconds`}
+                          value={ss}
+                          placeholder="00"
+                          min={0}
+                          max={59}
+                          step={1}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const cur = draft[milestone]?.thresholdSec;
+                            const curMm =
+                              typeof cur === "number"
+                                ? Math.floor(cur / 60)
+                                : 0;
+
+                            const nextSs =
+                              raw === ""
+                                ? undefined
+                                : clampInt(Number(raw), 0, 59);
+                            const nextSec =
+                              nextSs == null && raw === "" && mm === ""
+                                ? undefined
+                                : curMm * 60 + (nextSs ?? 0);
+
+                            setDraft((d) => ({
+                              ...d,
+                              [milestone]: {
+                                ...d[milestone],
+                                thresholdSec: nextSec,
+                              },
+                            }));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            if (autosaveTimerRef.current)
+                              clearTimeout(autosaveTimerRef.current);
+                            autosaveTimerRef.current = null;
+                            void persistDraft("manual");
+                          }}
+                          className="timeField"
+                        />
+                        <span className="timeUnit">s</span>
+                      </div>
+
+                      <label className="milestoneToggle">
                         <input
                           type="checkbox"
                           checked={enabled}
@@ -1871,112 +1978,7 @@ function App() {
                             }));
                           }}
                         />
-                        on
                       </label>
-
-                      <div className="timeGroup">
-                        <div className="timeLabels">
-                          <div>min</div>
-                          <div />
-                          <div>sec</div>
-                        </div>
-
-                        <div className="timeInputs">
-                          <div className="timePrefix">&lt;</div>
-
-                          <input
-                            type="number"
-                            aria-label={`${milestone}-minutes`}
-                            value={mm}
-                            placeholder="0"
-                            min={0}
-                            step={1}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              // Minutes: allow blank; clamp to >= 0. (No hard max.)
-                              const cur = draft[milestone]?.thresholdSec;
-                              const curMm =
-                                typeof cur === "number"
-                                  ? Math.floor(cur / 60)
-                                  : 0;
-                              const curSs =
-                                typeof cur === "number" ? cur % 60 : 0;
-
-                              const nextMm =
-                                raw === ""
-                                  ? undefined
-                                  : clampInt(Number(raw), 0, 9999);
-                              const nextSec =
-                                nextMm == null && raw === "" && ss === ""
-                                  ? undefined
-                                  : (nextMm ?? curMm) * 60 + curSs;
-
-                              setDraft((d) => ({
-                                ...d,
-                                [milestone]: {
-                                  ...d[milestone],
-                                  thresholdSec: nextSec,
-                                },
-                              }));
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key !== "Enter") return;
-                              e.preventDefault();
-                              if (autosaveTimerRef.current)
-                                clearTimeout(autosaveTimerRef.current);
-                              autosaveTimerRef.current = null;
-                              void persistDraft("manual");
-                            }}
-                            className="timeField"
-                          />
-
-                          <div className="timeColon">:</div>
-
-                          <input
-                            type="number"
-                            aria-label={`${milestone}-seconds`}
-                            value={ss}
-                            placeholder="00"
-                            min={0}
-                            max={59}
-                            step={1}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              const cur = draft[milestone]?.thresholdSec;
-                              const curMm =
-                                typeof cur === "number"
-                                  ? Math.floor(cur / 60)
-                                  : 0;
-
-                              const nextSs =
-                                raw === ""
-                                  ? undefined
-                                  : clampInt(Number(raw), 0, 59);
-                              const nextSec =
-                                nextSs == null && raw === "" && mm === ""
-                                  ? undefined
-                                  : curMm * 60 + (nextSs ?? 0);
-
-                              setDraft((d) => ({
-                                ...d,
-                                [milestone]: {
-                                  ...d[milestone],
-                                  thresholdSec: nextSec,
-                                },
-                              }));
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key !== "Enter") return;
-                              e.preventDefault();
-                              if (autosaveTimerRef.current)
-                                clearTimeout(autosaveTimerRef.current);
-                              autosaveTimerRef.current = null;
-                              void persistDraft("manual");
-                            }}
-                            className="timeField"
-                          />
-                        </div>
-                      </div>
                     </div>
                   </div>
                 );
@@ -2007,6 +2009,7 @@ function App() {
                 {saving ? "Saving…" : "Save"}
               </button>
             </div>
+          </div>
           </div>
         ) : null}
 
@@ -2139,8 +2142,7 @@ function App() {
             <div className="downloadHubHeader">
               <div className="downloadHubTitle">Desktop app</div>
               <div className="downloadHubText">
-                Browser version only works with the tab open, download app for
-                full background notifications.
+                Get background alerts even when closed.
               </div>
             </div>
             <div className="downloadHubActions">
@@ -2288,7 +2290,7 @@ function App() {
             onClick={() => setShowInstallDetails(false)}
           >
             <div
-              className="qhModal"
+              className="qhModal installGuideModal"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-label="Install help"
@@ -2301,8 +2303,7 @@ function App() {
                       : "Install runAlert on Windows"}
                   </div>
                   <div className="qhHelp">
-                    Just follow these steps. You can open this guide again
-                    anytime.
+                    Follow these steps to get started.
                   </div>
                 </div>
                 <button
@@ -2357,15 +2358,26 @@ function App() {
                 </div>
 
                 <div className="installGuideStepMeta">
-                  <span className="installGuideEyebrow">
-                    {activeInstallStep.eyebrow}
-                  </span>
-                  <span className="installGuideCounter">
-                    {installGuideStep + 1} / {installGuide.length}
-                  </span>
+                  {installGuide.map((_, i) => (
+                    <span
+                      key={i}
+                      className={`installGuideDot${i === installGuideStep ? " active" : ""}`}
+                    />
+                  ))}
                 </div>
 
                 <div className="installGuidePanel">
+                  {activeInstallStep.imageSrc ? (
+                    <div className="installGuideShotFrame">
+                      <img
+                        className="installGuideShot"
+                        src={activeInstallStep.imageSrc}
+                        alt={activeInstallStep.imageAlt}
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null}
+
                   <div className="installGuideCopy">
                     <div className="installGuideTitle">
                       {activeInstallStep.title}
@@ -2428,17 +2440,6 @@ function App() {
                       </div>
                     ) : null}
                   </div>
-
-                  {activeInstallStep.imageSrc ? (
-                    <div className="installGuideShotFrame">
-                      <img
-                        className="installGuideShot"
-                        src={activeInstallStep.imageSrc}
-                        alt={activeInstallStep.imageAlt}
-                        loading="lazy"
-                      />
-                    </div>
-                  ) : null}
                 </div>
 
                 <div className="installGuideFooter">
@@ -2857,182 +2858,172 @@ function App() {
               {quietErr ? <div className="qhError">{quietErr}</div> : null}
 
               <div className="qhBody">
-                {quietDraft.length ? (
-                  <div className="qhList">
-                    {quietDraft.map((span, idx) => {
-                      const canRemove = !quietSaving;
-                      return (
-                        <div className="qhRow" key={idx}>
-                          <div className="qhRowLabel">Span {idx + 1}</div>
-
-                          <div className="qhTimes">
-                            <div className="qhTimeBlock">
-                              <div className="qhTimeCaption">Start</div>
-                              <div className="qhTimeInputs">
-                                <input
-                                  className="qhTimeField"
-                                  type="number"
-                                  min={1}
-                                  max={12}
-                                  placeholder="9"
-                                  value={span.start.hh}
-                                  aria-label={`quiet-${idx}-start-hour`}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        start: { ...next[idx].start, hh: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <div className="qhColon">:</div>
-                                <input
-                                  className="qhTimeField"
-                                  type="number"
-                                  min={0}
-                                  max={59}
-                                  placeholder="00"
-                                  value={span.start.mm}
-                                  aria-label={`quiet-${idx}-start-minute`}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        start: { ...next[idx].start, mm: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <select
-                                  className="qhAmPm"
-                                  value={span.start.ampm}
-                                  aria-label={`quiet-${idx}-start-ampm`}
-                                  onChange={(e) => {
-                                    const v = e.target.value as AmPm;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        start: { ...next[idx].start, ampm: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  <option value="AM">AM</option>
-                                  <option value="PM">PM</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            <div className="qhTimeBlock">
-                              <div className="qhTimeCaption">End</div>
-                              <div className="qhTimeInputs">
-                                <input
-                                  className="qhTimeField"
-                                  type="number"
-                                  min={1}
-                                  max={12}
-                                  placeholder="9"
-                                  value={span.end.hh}
-                                  aria-label={`quiet-${idx}-end-hour`}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        end: { ...next[idx].end, hh: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <div className="qhColon">:</div>
-                                <input
-                                  className="qhTimeField"
-                                  type="number"
-                                  min={0}
-                                  max={59}
-                                  placeholder="00"
-                                  value={span.end.mm}
-                                  aria-label={`quiet-${idx}-end-minute`}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        end: { ...next[idx].end, mm: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <select
-                                  className="qhAmPm"
-                                  value={span.end.ampm}
-                                  aria-label={`quiet-${idx}-end-ampm`}
-                                  onChange={(e) => {
-                                    const v = e.target.value as AmPm;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        end: { ...next[idx].end, ampm: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  <option value="AM">AM</option>
-                                  <option value="PM">PM</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="qhRowActions">
-                            <button
-                              type="button"
-                              className="qhRemove"
-                              disabled={!canRemove}
-                              onClick={() => {
-                                setQuietDraft((d) =>
-                                  d.filter((_, i) => i !== idx)
-                                );
-                              }}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                {quietDraft.map((span, idx) => (
+                  <div className="qhPeriod" key={idx}>
+                    <div className="qhPeriodHeader">
+                      <span className="qhPeriodLabel">
+                        {quietDraft.length > 1 ? `Period ${idx + 1}` : "Mute from"}
+                      </span>
+                      {confirmRemoveQH === idx ? (
+                        <span className="qhConfirmRemove">
+                          <span className="qhConfirmText">Remove?</span>
+                          <button
+                            type="button"
+                            className="qhConfirmYes"
+                            onClick={() => {
+                              setQuietDraft((d) => d.filter((_, i) => i !== idx));
+                              setConfirmRemoveQH(null);
+                            }}
+                          >
+                            Yes
+                          </button>
+                          <button
+                            type="button"
+                            className="qhConfirmNo"
+                            onClick={() => setConfirmRemoveQH(null)}
+                          >
+                            No
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="qhRemoveIcon"
+                          disabled={quietSaving}
+                          aria-label="Remove period"
+                          onClick={() => setConfirmRemoveQH(idx)}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M4.5 2H11.5M2 4H14M12.667 4L12.111 12.067C12.048 12.956 11.296 13.667 10.405 13.667H5.595C4.704 13.667 3.952 12.956 3.889 12.067L3.333 4M6.333 7.333V10.667M9.667 7.333V10.667" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    <div className="qhInlineRow">
+                      <div className="qhInlineTime">
+                        <input
+                          className="qhTimeCompact"
+                          type="number"
+                          min={1}
+                          max={12}
+                          placeholder="10"
+                          value={span.start.hh}
+                          aria-label={`quiet-${idx}-start-hour`}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], start: { ...next[idx].start, hh: v } };
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="qhTimeSep">:</span>
+                        <input
+                          className="qhTimeCompact"
+                          type="number"
+                          min={0}
+                          max={59}
+                          placeholder="00"
+                          value={span.start.mm}
+                          aria-label={`quiet-${idx}-start-minute`}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], start: { ...next[idx].start, mm: v } };
+                              return next;
+                            });
+                          }}
+                        />
+                        <select
+                          className="qhAmPmCompact"
+                          value={span.start.ampm}
+                          aria-label={`quiet-${idx}-start-ampm`}
+                          onChange={(e) => {
+                            const v = e.target.value as AmPm;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], start: { ...next[idx].start, ampm: v } };
+                              return next;
+                            });
+                          }}
+                        >
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                      <span className="qhArrow">→</span>
+                      <div className="qhInlineTime">
+                        <input
+                          className="qhTimeCompact"
+                          type="number"
+                          min={1}
+                          max={12}
+                          placeholder="7"
+                          value={span.end.hh}
+                          aria-label={`quiet-${idx}-end-hour`}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], end: { ...next[idx].end, hh: v } };
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="qhTimeSep">:</span>
+                        <input
+                          className="qhTimeCompact"
+                          type="number"
+                          min={0}
+                          max={59}
+                          placeholder="00"
+                          value={span.end.mm}
+                          aria-label={`quiet-${idx}-end-minute`}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], end: { ...next[idx].end, mm: v } };
+                              return next;
+                            });
+                          }}
+                        />
+                        <select
+                          className="qhAmPmCompact"
+                          value={span.end.ampm}
+                          aria-label={`quiet-${idx}-end-ampm`}
+                          onChange={(e) => {
+                            const v = e.target.value as AmPm;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], end: { ...next[idx].end, ampm: v } };
+                              return next;
+                            });
+                          }}
+                        >
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
-                ) : null}
+                ))}
 
                 <div className="qhFooter">
-                  <button
-                    type="button"
-                    className="qhAdd"
-                    disabled={
-                      quietSaving || quietDraft.length >= MAX_QUIET_SPANS
-                    }
-                    onClick={() => {
-                      if (quietDraft.length >= MAX_QUIET_SPANS) return;
-                      setQuietDraft((d) => [...d, defaultQuietSpan()]);
-                    }}
-                  >
-                    Add span ({quietDraft.length}/{MAX_QUIET_SPANS})
-                  </button>
+                  {quietDraft.length < MAX_QUIET_SPANS ? (
+                    <button
+                      type="button"
+                      className="qhAddPeriod"
+                      disabled={quietSaving}
+                      onClick={() => {
+                        setQuietDraft((d) => [...d, defaultQuietSpan()]);
+                      }}
+                    >
+                      + Add quiet period
+                    </button>
+                  ) : <div />}
 
                   <div className="qhFooterRight">
                     <button
@@ -3138,7 +3129,7 @@ function App() {
                   className="promptInput"
                   value={addStreamerName}
                   onChange={(e) => setAddStreamerName(e.target.value)}
-                  placeholder="e.g. xQcOW"
+                  placeholder="e.g. xQc"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key !== "Enter") return;
