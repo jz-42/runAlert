@@ -14,6 +14,7 @@ Ship a public beta that is honest, usable, and narrow:
 
 Do not post publicly until all of these are done:
 
+- [ ] Mac notarization is confirmed and the signed/notarized build is published
 - [ ] hosted browser config persistence is confirmed
 - [ ] basic analytics are live and verified
 - [ ] live Mac install flow is sanity-checked from the real site
@@ -37,9 +38,12 @@ Done:
 - hosted config persistence is hardened in code:
   Supabase-backed token configs auto-enable when env vars are present
 - dashboard analytics wiring already exists in code
+- Developer ID signing is working for the packaged Mac app
 
 Still open:
 
+- let the current notarization run finish and verify it
+- publish the signed/notarized Mac assets
 - verify production Supabase envs/table
 - verify production analytics envs and event flow
 - final Mac live sanity pass
@@ -49,7 +53,27 @@ Still open:
 
 ## Phased Plan
 
-### Phase 1: Hosted State And Metrics
+### Phase 1: Mac Signing, Notarization, And Release Refresh
+
+Estimated time: `15-45 min`
+
+Goal: finish the Apple trust path and make sure the files users download are the new trusted ones.
+
+Tasks:
+
+- [ ] let the current `notarytool` submission finish
+- [ ] verify:
+  - `xcrun stapler validate "dist-app/mac-arm64/runAlert.app"`
+  - `spctl --assess --type execute --verbose "dist-app/mac-arm64/runAlert.app"`
+- [ ] upload the new signed/notarized Mac DMG + ZIP release assets
+- [ ] update public/install wording that still says the Mac build is unsigned
+
+Why this is before public posting:
+
+- signing is already working
+- the user-facing trust win is not complete until notarization is verified and the public assets are refreshed
+
+### Phase 2: Hosted State And Metrics
 
 Estimated time: `20-40 min`
 
@@ -77,7 +101,7 @@ Why this is before public posting:
 - if config resets, the web experience feels broken
 - if analytics are absent, you lose the first real launch signal
 
-### Phase 2: Final Mac Sanity
+### Phase 3: Final Mac Sanity
 
 Estimated time: `30-60 min`
 
@@ -103,7 +127,7 @@ Ship threshold for this phase:
 - no blocker in alert flow
 - no confusing background-monitoring failure
 
-### Phase 3: Windows Build
+### Phase 4: Windows Build
 
 Estimated time: `30-60 min`
 
@@ -127,7 +151,7 @@ Signing:
 - [ ] not required for beta launch
 - [ ] expect SmartScreen / unknown publisher friction until later
 
-### Phase 4: Windows Activation And Smoke Test
+### Phase 5: Windows Activation And Smoke Test
 
 Estimated time: `20-40 min`
 
@@ -151,7 +175,7 @@ Fallback:
 - if Windows build or smoke test slips, ship publicly as Mac-first beta and say
   Windows is still being validated
 
-### Phase 5: Final Trust And Public Copy
+### Phase 6: Final Trust And Public Copy
 
 Estimated time: `20-30 min`
 
@@ -166,14 +190,13 @@ Tasks:
   - Mac-first
   - no account required
   - source is public
-  - current Mac build is unsigned
+  - Mac build is signed/notarized if Phase 1 succeeded
   - Windows status is accurate
 
 ## Deferred On Purpose
 
 Not required before the public beta post:
 
-- Apple signing/notarization
 - Windows code signing
 - update-awareness UI
 - deeper analytics cleanup beyond basic live verification
@@ -192,7 +215,7 @@ For beginner users:
 - explain what the app does
 - explain what stays local
 - explain that no account is required
-- explain the unsigned Mac warning in plain English
+- explain the current Mac security state in plain English
 
 For technical users:
 
@@ -205,7 +228,21 @@ Do not say:
 
 - that AI review guarantees safety
 - that unsigned means unsafe
+- that the app is notarized until verification confirms it
 - that the app is signed/notarized if it is not
+
+## Parallel Work
+
+Allowed in parallel:
+
+- minor Claude UI/visual polish that does not change launch-critical behavior
+
+Do not let parallel polish block:
+
+- notarization completion
+- hosted config persistence
+- metrics verification
+- release asset refresh
 
 ## Useful Commands
 

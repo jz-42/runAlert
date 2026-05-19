@@ -11,17 +11,25 @@ Ship an honest public beta that is:
 - transparent about trust and beta friction
 - narrow enough to verify in one launch-day window
 
-## What We Achieved Today
+## Current Status As Of May 19
 
-- pushed the latest source changes to `main`
-- refreshed the live Mac download assets and verified the public download URLs
-- improved the Mac install guide and trust/security messaging
-- added the full Windows install walkthrough with placeholder screenshots
-- implemented background-monitoring UX and quit handling
-- hardened hosted config persistence in code so Supabase auto-enables when the env vars exist
-- confirmed analytics wiring already exists in the dashboard code
-- simplified the Windows build into one laptop command:
+Achieved:
+
+- live Mac download assets were refreshed earlier and verified
+- Mac install guide/trust flow was improved
+- full Windows install walkthrough was added with placeholder screenshots
+- background-monitoring UX and quit handling are implemented
+- hosted config persistence was hardened in code so Supabase auto-enables when env vars exist
+- analytics wiring already exists in the dashboard code
+- Windows laptop build was simplified to:
   `npm run windows:beta:build`
+- Developer ID signing is now working for the packaged Mac app
+- notarization credentials are stored in Keychain under `runalert-notary`
+
+Active in parallel:
+
+- Claude is being used for limited UI/visual polish
+- that work should stay cosmetic and not disrupt the launch-critical flow below
 
 ## Critical Reality Checks
 
@@ -37,7 +45,10 @@ The packaged desktop app stores config under the local Electron user-data direct
 4. Background Monitoring exists. Desktop auto-update does not.
 There is an `agent.autoUpdate` setting for the watcher-script path, but there is no packaged Electron app auto-update system wired today.
 
-5. Windows is optional for the public post only if we describe it honestly.
+5. Apple signing is working. Apple notarization is not fully verified yet.
+The app now signs with Developer ID successfully, but Gatekeeper acceptance depends on notarization completing and verifying cleanly.
+
+6. Windows is optional for the public post only if we describe it honestly.
 If the Windows build/smoke test slips, post as Mac-first beta.
 
 ## Public Post Gate
@@ -45,6 +56,7 @@ If the Windows build/smoke test slips, post as Mac-first beta.
 Do not post publicly until these are true:
 
 - [ ] hosted browser config persistence is confirmed after a redeploy
+- [ ] Mac notarization is confirmed and the signed/notarized build is published
 - [ ] basic analytics are live and verified
 - [ ] live Mac install flow is sanity-checked from the real site
 - [ ] packaged alert flow is sanity-checked
@@ -55,7 +67,31 @@ Do not post publicly until these are true:
 
 ## Recommended Order From Here
 
-### Phase 1: Fix Hosted Browser Persistence
+### Phase 1: Finish Mac Notarization And Publish The New Build
+
+Estimated time: `15-45 min`
+
+Why first:
+
+- Apple trust is the biggest new upgrade since the previous launch-day plan
+- the current app is signed, but the real user benefit arrives only after notarization and republishing
+
+Tasks:
+
+- [ ] let the running `notarytool` submission finish
+- [ ] verify the result with:
+  - `xcrun stapler validate "dist-app/mac-arm64/runAlert.app"`
+  - `spctl --assess --type execute --verbose "dist-app/mac-arm64/runAlert.app"`
+- [ ] rebuild again only if notarization fails or the app needs stapling/retry
+- [ ] upload the new signed/notarized DMG + ZIP release assets
+- [ ] update trust/install wording anywhere that still says the Mac build is unsigned
+
+Definition of done:
+
+- the built app is notarized
+- the release assets are the signed/notarized ones users will actually download
+
+### Phase 2: Fix Hosted Browser Persistence
 
 Estimated time: `25-45 min`
 
@@ -79,7 +115,7 @@ Definition of done:
 
 - a live web config survives a Render redeploy
 
-### Phase 2: Turn On Basic Metrics
+### Phase 3: Turn On Basic Metrics
 
 Estimated time: `10-20 min`
 
@@ -101,7 +137,7 @@ Definition of done:
 
 - at least one real session shows up with real launch events
 
-### Phase 3: Final Mac Sanity
+### Phase 4: Final Mac Sanity
 
 Estimated time: `30-45 min`
 
@@ -130,7 +166,7 @@ Definition of done:
 - no blocker in alert flow
 - no confusing background-monitoring behavior
 
-### Phase 4: Windows Build And Smoke Test
+### Phase 5: Windows Build And Smoke Test
 
 Estimated time: `40-75 min`
 
@@ -158,7 +194,7 @@ Fallback:
 
 - if this slips, ship publicly as `Mac-first beta` and say Windows is still being validated
 
-### Phase 5: Final Public Copy And Ship Decision
+### Phase 6: Final Public Copy And Ship Decision
 
 Estimated time: `20-30 min`
 
@@ -171,7 +207,7 @@ Tasks:
   - Mac-first
   - no account required
   - source code is public
-  - current Mac build is unsigned
+  - Mac build is signed/notarized if Phase 1 succeeded
   - Windows status is accurate
 
 ## Security And Trust
@@ -186,7 +222,7 @@ Beginner trust path:
 - no account required
 - clear explanation of what the app does
 - clear explanation of what stays local
-- plain-English explanation of unsigned beta warnings
+- plain-English explanation of any remaining beta/security warnings
 
 Technical trust path:
 
@@ -199,6 +235,7 @@ Important honesty rule:
 
 - do not say AI review guarantees safety
 - do not imply unsigned means unsafe
+- do not say the app is notarized until `spctl`/stapling verify it
 - do not imply the packaged desktop app auto-updates if it does not
 
 ## UI And Userflow Status
@@ -209,6 +246,11 @@ Handled already:
 - Windows install guide now matches the Mac structure
 - background-monitoring UI is implemented
 - download flow points at live GitHub release assets
+- Mac signing is wired and working
+
+Parallel work:
+
+- Claude UI polish can continue in parallel as long as it stays non-blocking and does not rewrite launch-critical behavior
 
 Still worth a final pass, but not the first blocker:
 
@@ -219,7 +261,6 @@ Still worth a final pass, but not the first blocker:
 
 Not required before the public beta post:
 
-- Apple signing/notarization
 - Windows code signing
 - packaged desktop auto-update
 - deeper analytics dashboards/funnels
