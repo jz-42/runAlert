@@ -45,6 +45,7 @@
     "appId": "app.runalert.desktop",
     "productName": "runAlert",
     "icon": "dashboard/public/icon-1024.png",
+    "afterSign": "scripts/notarize-mac.js",
     "directories": {
       "output": "dist-app"
     },
@@ -57,6 +58,9 @@
     ],
     "mac": {
       "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "entitlements": "electron/entitlements.mac.plist",
+      "entitlementsInherit": "electron/entitlements.mac.inherit.plist",
       "target": [
         "dmg",
         "zip"
