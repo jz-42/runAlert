@@ -1489,13 +1489,12 @@ function App() {
         <div className="titleRow" data-testid="header-titleRow">
           <div className="titleLeft">
             <div className="brandRow" data-testid="header-brandRow">
-              <div className="crestRow" aria-hidden="true">
-                <div
-                  className="brandArtSlot"
-                  data-testid="header-artSlot"
-                >
-                  <span className="titleDragon" data-testid="header-dragon" />
-                </div>
+              <div
+                className="brandArtSlot"
+                data-testid="header-artSlot"
+                aria-hidden="true"
+              >
+                <span className="titleDragon" data-testid="header-dragon" />
               </div>
               <div className="brandText">
                 <div className="titleLine">
