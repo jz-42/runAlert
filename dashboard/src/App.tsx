@@ -3094,7 +3094,16 @@ function App() {
                 <div>
                   <div className="qhTitle">Add Streamer</div>
                   <div className="qhHelp">
-                    Enter a Paceman player name (usually their Twitch handle).
+                    Enter a{" "}
+                    <a
+                      className="installGuideInlineLink"
+                      href="https://paceman.gg/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Paceman
+                    </a>{" "}
+                    player name (not always their Twitch handle).
                   </div>
                 </div>
                 <button
@@ -3124,7 +3133,6 @@ function App() {
               ) : null}
 
               <div className="promptBody">
-                <div className="promptLabel">Streamer name</div>
                 <input
                   className="promptInput"
                   value={addStreamerName}
