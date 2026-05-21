@@ -703,45 +703,48 @@ a.tag:hover{
 
 .milestoneBadge{
   position: absolute;
-  right: -8px;
-  top: 128px;
+  right: -16px;
+  top: 124px;
   z-index: 3;
-  height: 24px;
-  min-width: 60px;
-  padding: 0 10px;
+  height: 30px;
+  min-width: 72px;
+  padding: 0 14px;
   border-radius: var(--r-pill);
-  background: rgba(10, 10, 16, 0.92);
-  backdrop-filter: blur(6px);
-  color: rgba(236, 239, 246, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.42);
+  background: rgba(10, 10, 16, 0.94);
+  backdrop-filter: blur(8px);
+  color: rgba(245, 248, 254, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 6px 22px rgba(0, 0, 0, 0.55),
+    0 0 0 2px rgba(9, 9, 14, 0.55);
   display: grid;
   place-items: center;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 12.5px;
   letter-spacing: 0;
   white-space: nowrap;
   pointer-events: none;
 }
 
 .milestoneBadge.live{
-  animation: badgeBreathe 2.4s ease-in-out infinite;
+  animation: badgeBreathe 1.9s ease-in-out infinite;
 }
 
 .milestoneBadge.final{
   animation: none;
-  background: rgba(10, 10, 16, 0.92);
-  border-color: rgba(255, 255, 255, 0.14);
-  color: rgba(236, 239, 246, 0.95);
+  background: rgba(10, 10, 16, 0.94);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(245, 248, 254, 1);
   box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.45),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    0 6px 22px rgba(0, 0, 0, 0.55),
+    0 0 0 2px rgba(9, 9, 14, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 @keyframes badgeBreathe{
-  0%{ transform: scale(1); opacity: 0.88; }
-  55%{ transform: scale(1.035); opacity: 1; }
-  100%{ transform: scale(1); opacity: 0.88; }
+  0%{ transform: scale(1); opacity: 0.82; }
+  55%{ transform: scale(1.07); opacity: 1; }
+  100%{ transform: scale(1); opacity: 0.82; }
 }
 
 /* ── Labels ──────────────────────────────────────────────── */
@@ -1703,7 +1706,24 @@ a.tag:hover{
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.modalBtn:disabled{
+  opacity: 0.55;
+  cursor: default;
+}
+
+.modalBtn--save.saved{
+  background: rgba(85, 190, 130, 0.32);
+  border-color: rgba(110, 215, 155, 0.65);
+  color: rgba(220, 250, 230, 1);
+  box-shadow: 0 0 0 2px rgba(85, 190, 130, 0.18);
+  animation: saveSuccess 360ms ease-out;
 }
 
 .modalBtn:hover{
@@ -1740,8 +1760,15 @@ a.tag:hover{
 }
 
 .modalBtn--save{
-  background: rgba(120, 88, 188, 0.14);
-  color: rgba(180, 162, 230, 0.94);
+  border-color: rgba(85, 190, 130, 0.32);
+  background: rgba(85, 190, 130, 0.14);
+  color: rgba(180, 235, 195, 0.96);
+}
+
+.modalBtn--save:hover{
+  background: rgba(85, 190, 130, 0.22);
+  border-color: rgba(110, 215, 155, 0.48);
+  color: rgba(200, 245, 215, 1);
 }
 
 .settingsOverlay{
@@ -2482,18 +2509,50 @@ a.tag:hover{
   height: 34px;
   padding: 0 14px;
   border-radius: var(--r-pill);
-  border: 1px solid rgba(120, 88, 188, 0.30);
-  background: rgba(120, 88, 188, 0.14);
-  color: rgba(180, 162, 230, 0.94);
+  border: 1px solid rgba(85, 190, 130, 0.32);
+  background: rgba(85, 190, 130, 0.14);
+  color: rgba(180, 235, 195, 0.96);
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .qhSave:hover{
-  background: rgba(120, 88, 188, 0.22);
-  border-color: rgba(140, 115, 210, 0.45);
-  color: rgba(200, 185, 240, 0.98);
+  background: rgba(85, 190, 130, 0.22);
+  border-color: rgba(110, 215, 155, 0.48);
+  color: rgba(200, 245, 215, 1);
+}
+
+.qhSave:disabled{
+  opacity: 0.55;
+  cursor: default;
+}
+
+.qhSave.saved,
+.modalBtn--save.saved{
+  background: rgba(85, 190, 130, 0.32);
+  border-color: rgba(110, 215, 155, 0.65);
+  color: rgba(220, 250, 230, 1);
+  box-shadow: 0 0 0 2px rgba(85, 190, 130, 0.18);
+  animation: saveSuccess 360ms ease-out;
+}
+
+@keyframes saveSuccess{
+  0%{ transform: scale(1); }
+  45%{ transform: scale(1.06); }
+  100%{ transform: scale(1); }
+}
+
+.savedCheck{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
 }

@@ -342,7 +342,10 @@ function App() {
   const [quietDraft, setQuietDraft] = useState<QuietSpanDraft[]>([]);
   const [quietErr, setQuietErr] = useState<string | null>(null);
   const [quietSaving, setQuietSaving] = useState(false);
+  const [quietSaved, setQuietSaved] = useState(false);
   const [confirmRemoveQH, setConfirmRemoveQH] = useState<number | null>(null);
+  const [milestoneSaved, setMilestoneSaved] = useState(false);
+  const milestoneSavedTimerRef = useRef<number | null>(null);
   const [statusByName, setStatusByName] = useState<
     Record<
       string,
@@ -1997,16 +2000,48 @@ function App() {
               </button>
 
               <button
-                disabled={!cfg || !selected || saving}
+                disabled={!cfg || !selected || saving || milestoneSaved}
                 onClick={async () => {
                   if (autosaveTimerRef.current)
                     clearTimeout(autosaveTimerRef.current);
                   autosaveTimerRef.current = null;
                   await persistDraft("manual");
+                  if (milestoneSavedTimerRef.current) {
+                    window.clearTimeout(milestoneSavedTimerRef.current);
+                  }
+                  setMilestoneSaved(true);
+                  milestoneSavedTimerRef.current = window.setTimeout(() => {
+                    setMilestoneSaved(false);
+                    milestoneSavedTimerRef.current = null;
+                  }, 1200);
                 }}
-                className={`modalBtn ${saving ? "" : "modalBtn--save"}`}
+                className={`modalBtn modalBtn--save${
+                  milestoneSaved ? " saved" : ""
+                }`}
               >
-                {saving ? "Saving…" : "Save"}
+                {milestoneSaved ? (
+                  <>
+                    <svg
+                      className="savedCheck"
+                      viewBox="0 0 14 14"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M2.5 7.5L5.5 10.5L11.5 4"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                      />
+                    </svg>
+                    Saved
+                  </>
+                ) : saving ? (
+                  "Saving…"
+                ) : (
+                  "Save"
+                )}
               </button>
             </div>
           </div>
@@ -3041,8 +3076,8 @@ function App() {
 
                     <button
                       type="button"
-                      disabled={quietSaving}
-                      className="qhSave"
+                      disabled={quietSaving || quietSaved}
+                      className={`qhSave${quietSaved ? " saved" : ""}`}
                       onClick={async () => {
                         if (!cfg) return;
                         const v = validateQuietDraft(quietDraft);
@@ -3059,15 +3094,41 @@ function App() {
                             stripLegacyForsenConfig(next)
                           );
                           applyConfig(saved);
-                          setShowQuietHours(false);
+                          setQuietSaving(false);
+                          setQuietSaved(true);
+                          window.setTimeout(() => {
+                            setShowQuietHours(false);
+                            setQuietSaved(false);
+                          }, 900);
                         } catch (e: any) {
                           setQuietErr(e?.message ?? String(e));
-                        } finally {
                           setQuietSaving(false);
                         }
                       }}
                     >
-                      {quietSaving ? "Saving…" : "Save"}
+                      {quietSaved ? (
+                        <>
+                          <svg
+                            className="savedCheck"
+                            viewBox="0 0 14 14"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M2.5 7.5L5.5 10.5L11.5 4"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              fill="none"
+                            />
+                          </svg>
+                          Saved
+                        </>
+                      ) : quietSaving ? (
+                        "Saving…"
+                      ) : (
+                        "Save"
+                      )}
                     </button>
                   </div>
                 </div>
