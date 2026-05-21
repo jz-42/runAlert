@@ -111,7 +111,7 @@
   max-width: 1280px;
   width: 100%;
   margin: 0 auto;
-  padding: clamp(20px, 2.5vw, 32px) clamp(20px, 4vw, 52px) 72px;
+  padding: clamp(14px, 1.8vw, 22px) clamp(20px, 4vw, 52px) 72px;
   position: relative;
   z-index: 1;
 }
@@ -154,20 +154,17 @@ h1{
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  min-height: 24px;
+  min-height: 21px;
   padding: 0 10px;
-  border: 1px solid rgba(120, 88, 188, 0.40);
-  background: rgba(120, 88, 188, 0.18);
-  color: rgba(170, 145, 235, 1);
+  border: 1px solid rgba(120, 88, 188, 0.32);
+  background: rgba(120, 88, 188, 0.10);
+  color: rgba(170, 145, 235, 0.96);
   border-radius: var(--r-pill);
   line-height: 1;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.08),
-    0 6px 16px rgba(0,0,0,0.18);
 }
 
 a.tag{
@@ -190,7 +187,7 @@ a.tag:hover{
 .brandMark{
   position: fixed;
   top: clamp(8px, 1.5vw, 18px);
-  left: clamp(10px, 2vw, 28px);
+  left: clamp(0px, 1vw, 14px);
   width: clamp(130px, 12vw, 180px);
   height: clamp(90px, 9vw, 130px);
   z-index: 10;
@@ -201,7 +198,7 @@ a.tag:hover{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   text-align: center;
   flex: 0 1 auto;
   min-width: 0;
@@ -234,14 +231,13 @@ a.tag:hover{
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  position: relative;
-  top: -2px;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 .metaWarn{
-  color: rgba(255, 140, 140, 0.70);
-  font-size: 11px;
+  color: rgba(255, 140, 140, 0.65);
+  font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.01em;
 }
@@ -261,7 +257,7 @@ a.tag:hover{
 /* ── Pills / Tags ────────────────────────────────────────── */
 
 .utilityRow{
-  margin-top: 10px;
+  margin-top: 6px;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -487,7 +483,7 @@ a.tag:hover{
 /* ── Streamer Grid ───────────────────────────────────────── */
 
 .grid{
-  margin-top: 32px;
+  margin-top: 22px;
   display: grid;
   grid-template-columns: repeat(auto-fit, 160px);
   justify-content: center;
