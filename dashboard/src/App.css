@@ -189,7 +189,7 @@ a.tag:hover{
 
 .brandMark{
   position: fixed;
-  top: clamp(20px, 2.5vw, 32px);
+  top: clamp(8px, 1.4vw, 18px);
   left: clamp(0px, 1vw, 12px);
   width: clamp(114px, 10.5vw, 158px);
   height: clamp(80px, 8vw, 114px);
