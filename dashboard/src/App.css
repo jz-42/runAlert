@@ -729,59 +729,45 @@ a.tag:hover{
 
 .milestoneBadge{
   position: absolute;
-  left: 50%;
-  top: 142px;
-  transform: translateX(-50%);
+  right: -8px;
+  top: 128px;
   z-index: 3;
-  height: 22px;
+  height: 24px;
+  min-width: 60px;
   padding: 0 10px;
   border-radius: var(--r-pill);
-  background: rgba(20, 14, 36, 0.92);
-  backdrop-filter: blur(8px);
-  color: rgba(220, 210, 245, 0.92);
-  border: 1px solid rgba(120, 88, 188, 0.35);
-  box-shadow:
-    0 6px 18px rgba(0,0,0,0.50),
-    0 0 0 1px rgba(9, 9, 14, 0.40);
-  display: inline-flex;
-  align-items: center;
+  background: rgba(10, 10, 16, 0.92);
+  backdrop-filter: blur(6px);
+  color: rgba(236, 239, 246, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.42);
+  display: grid;
+  place-items: center;
   font-weight: 600;
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0;
   white-space: nowrap;
   pointer-events: none;
 }
 
 .milestoneBadge.live{
   animation: badgeBreathe 2.4s ease-in-out infinite;
-  border-color: rgba(120, 88, 188, 0.50);
-  color: rgba(230, 220, 250, 0.98);
-  box-shadow:
-    0 6px 20px rgba(0,0,0,0.55),
-    0 0 0 1px rgba(9, 9, 14, 0.40),
-    0 0 14px rgba(120, 88, 188, 0.25);
 }
 
 .milestoneBadge.final{
   animation: none;
-  background: linear-gradient(
-    180deg,
-    rgba(120, 88, 188, 0.32) 0%,
-    rgba(95, 69, 168, 0.28) 100%
-  );
-  border-color: rgba(155, 132, 220, 0.50);
-  color: rgba(220, 205, 250, 0.98);
+  background: rgba(10, 10, 16, 0.92);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(236, 239, 246, 0.95);
   box-shadow:
-    0 6px 20px rgba(0,0,0,0.55),
-    0 0 0 1px rgba(9, 9, 14, 0.40),
-    0 0 16px rgba(120, 88, 188, 0.30);
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
 @keyframes badgeBreathe{
-  0%{ transform: translateX(-50%) scale(1); opacity: 0.92; }
-  55%{ transform: translateX(-50%) scale(1.035); opacity: 1; }
-  100%{ transform: translateX(-50%) scale(1); opacity: 0.92; }
+  0%{ transform: scale(1); opacity: 0.88; }
+  55%{ transform: scale(1.035); opacity: 1; }
+  100%{ transform: scale(1); opacity: 0.88; }
 }
 
 /* ── Labels ──────────────────────────────────────────────── */
