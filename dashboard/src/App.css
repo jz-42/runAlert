@@ -154,17 +154,20 @@ h1{
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  min-height: 21px;
+  min-height: 24px;
   padding: 0 10px;
-  border: 1px solid rgba(120, 88, 188, 0.32);
-  background: rgba(120, 88, 188, 0.10);
-  color: rgba(170, 145, 235, 0.96);
+  border: 1px solid rgba(120, 88, 188, 0.40);
+  background: rgba(120, 88, 188, 0.18);
+  color: rgba(170, 145, 235, 1);
   border-radius: var(--r-pill);
   line-height: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 6px 16px rgba(0,0,0,0.18);
 }
 
 a.tag{
@@ -186,10 +189,10 @@ a.tag:hover{
 
 .brandMark{
   position: fixed;
-  top: clamp(8px, 1.5vw, 18px);
-  left: clamp(0px, 1vw, 14px);
-  width: clamp(130px, 12vw, 180px);
-  height: clamp(90px, 9vw, 130px);
+  top: clamp(0px, 0.5vw, 8px);
+  left: clamp(-10px, 0vw, 4px);
+  width: clamp(114px, 10.5vw, 158px);
+  height: clamp(80px, 8vw, 114px);
   z-index: 10;
   pointer-events: none;
 }
@@ -198,7 +201,7 @@ a.tag:hover{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   text-align: center;
   flex: 0 1 auto;
   min-width: 0;
@@ -231,13 +234,14 @@ a.tag:hover{
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-top: 4px;
+  gap: 8px;
+  position: relative;
+  top: -2px;
 }
 
 .metaWarn{
-  color: rgba(255, 140, 140, 0.65);
-  font-size: 10.5px;
+  color: rgba(255, 140, 140, 0.70);
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.01em;
 }

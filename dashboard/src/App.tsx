@@ -1500,19 +1500,21 @@ function App() {
           <div className="titleLeft">
             <div className="brandRow" data-testid="header-brandRow">
               <div className="brandText">
-                <h1 className="appTitle" data-testid="header-title">
-                  Minecraft Speedrun Notifier
-                </h1>
-                <div className="metaRow" data-testid="header-meta">
-                  <a
-                    className="tag"
-                    href={GITHUB_REPO_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {APP_CHANNEL}
-                  </a>
-                  <span className="metaWarn">⚠ Possible bugs</span>
+                <div className="titleLine">
+                  <h1 className="appTitle" data-testid="header-title">
+                    Minecraft Speedrun Notifier
+                  </h1>
+                  <div className="metaRow" data-testid="header-meta">
+                    <a
+                      className="tag"
+                      href={GITHUB_REPO_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {APP_CHANNEL}
+                    </a>
+                    <span className="metaWarn">⚠ Possible bugs</span>
+                  </div>
                 </div>
                 <div className="utilityRow" data-testid="header-utilityRow">
                   {desktopApp ? (
