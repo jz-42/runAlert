@@ -703,13 +703,13 @@ a.tag:hover{
 
 .milestoneBadge{
   position: absolute;
-  right: -16px;
-  top: 124px;
+  right: -10px;
+  top: 108px;
   z-index: 3;
-  height: 30px;
-  min-width: 72px;
-  padding: 0 14px;
-  border-radius: var(--r-pill);
+  height: 26px;
+  min-width: 66px;
+  padding: 0 11px;
+  border-radius: 10px;
   background: rgba(10, 10, 16, 0.94);
   backdrop-filter: blur(8px);
   color: rgba(245, 248, 254, 0.96);
@@ -720,14 +720,14 @@ a.tag:hover{
   display: grid;
   place-items: center;
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: 12px;
   letter-spacing: 0;
   white-space: nowrap;
   pointer-events: none;
 }
 
 .milestoneBadge.live{
-  animation: badgeBreathe 1.9s ease-in-out infinite;
+  animation: badgeBreathe 2.2s ease-in-out infinite;
 }
 
 .milestoneBadge.final{
@@ -742,9 +742,9 @@ a.tag:hover{
 }
 
 @keyframes badgeBreathe{
-  0%{ transform: scale(1); opacity: 0.82; }
-  55%{ transform: scale(1.07); opacity: 1; }
-  100%{ transform: scale(1); opacity: 0.82; }
+  0%{ transform: scale(1); opacity: 0.86; }
+  55%{ transform: scale(1.045); opacity: 1; }
+  100%{ transform: scale(1); opacity: 0.86; }
 }
 
 /* ── Labels ──────────────────────────────────────────────── */
