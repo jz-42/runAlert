@@ -1489,12 +1489,13 @@ function App() {
         <div className="titleRow" data-testid="header-titleRow">
           <div className="titleLeft">
             <div className="brandRow" data-testid="header-brandRow">
-              <div
-                className="brandArtSlot"
-                data-testid="header-artSlot"
-                aria-hidden="true"
-              >
-                <span className="titleDragon" data-testid="header-dragon" />
+              <div className="crestRow" aria-hidden="true">
+                <div
+                  className="brandArtSlot"
+                  data-testid="header-artSlot"
+                >
+                  <span className="titleDragon" data-testid="header-dragon" />
+                </div>
               </div>
               <div className="brandText">
                 <div className="titleLine">
@@ -2043,16 +2044,16 @@ function App() {
                     draggable={false}
                   />
                 ) : null}
-                {getBadgeData(name) ? (
-                  <span
-                    className={`milestoneBadge ${getBadgeData(name)!.className}`}
-                    aria-label={`${name}-milestone`}
-                    title={badgeTitleFor(name)}
-                  >
-                    {milestoneBadgeText(getBadgeData(name)!.milestone)}
-                  </span>
-                ) : null}
               </button>
+              {getBadgeData(name) ? (
+                <span
+                  className={`milestoneBadge ${getBadgeData(name)!.className}`}
+                  aria-label={`${name}-milestone`}
+                  title={badgeTitleFor(name)}
+                >
+                  {milestoneBadgeText(getBadgeData(name)!.milestone)}
+                </span>
+              ) : null}
               <a
                 className={`label labelLink labelRow ${
                   isStreamerLive(name) ? "labelLive" : ""
@@ -2117,17 +2118,17 @@ function App() {
                   draggable={false}
                 />
               ) : null}
-              {getBadgeData(dragState.name) ? (
-                <span
-                  className={`milestoneBadge ${
-                    getBadgeData(dragState.name)!.className
-                  }`}
-                  aria-hidden="true"
-                >
-                  {milestoneBadgeText(getBadgeData(dragState.name)!.milestone)}
-                </span>
-              ) : null}
             </div>
+            {getBadgeData(dragState.name) ? (
+              <span
+                className={`milestoneBadge ${
+                  getBadgeData(dragState.name)!.className
+                }`}
+                aria-hidden="true"
+              >
+                {milestoneBadgeText(getBadgeData(dragState.name)!.milestone)}
+              </span>
+            ) : null}
             <div className="label">{dragState.name}</div>
             <div className="milestoneSubtitle">
               {subtitleFor(dragState.name) ?? "Last update • —"}
@@ -3218,7 +3219,7 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className="qhSave"
+                  className="modalBtn modalBtn--danger modalBtn--solid"
                   onClick={() => {
                     const name = pendingRemove;
                     setPendingRemove(null);
