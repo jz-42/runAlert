@@ -51,7 +51,7 @@ const APP_VERSION = "0.2";
 const APP_CHANNEL = "Beta";
 const MAX_STREAMERS = 15;
 const MAX_QUIET_SPANS = 3;
-const BROWSER_ALERTS_KEY = "runalert-browser-alerts";
+const BROWSER_ALERTS_LEGACY_KEY = "runalert-browser-alerts";
 const BROWSER_ALERTS_DEDUPE_KEY = "runalert-browser-alerts-dedupe";
 const ONBOARDING_DISMISSED_KEY = "runalert-onboarding-dismissed";
 const APP_FIRST_OPENED_KEY = "runalert-app-first-opened";
@@ -332,8 +332,14 @@ function App() {
   const [testStatus, setTestStatus] = useState<
     "idle" | "sending" | "success" | "error"
   >("idle");
-  const [browserAlertsEnabled, setBrowserAlertsEnabled] = useState(false);
+  const [browserPermission, setBrowserPermission] = useState<
+    NotificationPermission | "unsupported"
+  >(() => {
+    if (typeof Notification === "undefined") return "unsupported";
+    return Notification.permission;
+  });
   const [browserAlertsErr, setBrowserAlertsErr] = useState<string | null>(null);
+  const browserMigrationDoneRef = useRef(false);
   const [allToggleOn, setAllToggleOn] = useState(true);
   const [allToggleOwner, setAllToggleOwner] = useState<string | null>(null);
 
@@ -504,44 +510,37 @@ function App() {
     setShowCopyFallback(true);
   }
 
-  function persistBrowserAlerts(enabled: boolean) {
-    setBrowserAlertsEnabled(enabled);
-    try {
-      window.localStorage.setItem(BROWSER_ALERTS_KEY, String(enabled));
-    } catch {
-      // ignore storage failures
-    }
-  }
-
   async function enableBrowserAlerts() {
     setBrowserAlertsErr(null);
-    if (typeof Notification === "undefined") {
+    if (browserPermission === "unsupported") {
       setBrowserAlertsErr("Browser notifications are not supported here.");
+      if (!notificationsEnabled) toggleNotificationsEnabled(true);
       return;
     }
-    if (Notification.permission === "granted") {
-      persistBrowserAlerts(true);
-      void trackEvent("browser_alerts_enabled", { enabled: true });
-      return;
-    }
-    if (Notification.permission === "denied") {
+    if (browserPermission === "denied") {
       setBrowserAlertsErr(
         "Notifications are blocked in this browser. Enable them in browser settings."
       );
+      if (!notificationsEnabled) toggleNotificationsEnabled(true);
       return;
     }
-    const perm = await Notification.requestPermission();
-    if (perm === "granted") {
-      persistBrowserAlerts(true);
-      void trackEvent("browser_alerts_enabled", { enabled: true });
-    } else {
-      setBrowserAlertsErr("Notification permission was denied.");
+    if (browserPermission === "default") {
+      const perm = await Notification.requestPermission();
+      setBrowserPermission(perm);
+      if (perm !== "granted") {
+        setBrowserAlertsErr("Notification permission was denied.");
+        if (!notificationsEnabled) toggleNotificationsEnabled(true);
+        return;
+      }
     }
+    if (!notificationsEnabled) toggleNotificationsEnabled(true);
+    void trackEvent("browser_alerts_enabled", { enabled: true });
   }
 
   function disableBrowserAlerts() {
     setBrowserAlertsErr(null);
-    persistBrowserAlerts(false);
+    if (notificationsEnabled) toggleNotificationsEnabled(false);
+    void trackEvent("browser_alerts_enabled", { enabled: false });
   }
 
   function updateNotificationPrefs({
@@ -648,7 +647,7 @@ function App() {
   }
 
   function maybeSendBrowserAlerts(statuses: Record<string, any>) {
-    if (!cfg || !browserAlertsEnabled) return;
+    if (!cfg) return;
     if (!notificationsEnabled) return;
     if (typeof Notification === "undefined") return;
     if (Notification.permission !== "granted") return;
@@ -917,25 +916,37 @@ function App() {
   }, []);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(BROWSER_ALERTS_KEY);
-      if (raw === "true") {
-        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-          setBrowserAlertsEnabled(true);
-        } else if (
-          typeof Notification !== "undefined" &&
-          Notification.permission === "denied"
-        ) {
-          setBrowserAlertsErr(
-            "Notifications are blocked in this browser. Enable them in browser settings."
-          );
-        }
-      }
-    } catch {
-      // ignore
+    if (
+      typeof Notification !== "undefined" &&
+      Notification.permission === "denied"
+    ) {
+      setBrowserAlertsErr(
+        "Notifications are blocked in this browser. Enable them in browser settings."
+      );
     }
     loadBrowserAlertDedupe();
   }, []);
+
+  // One-time migration from the old browser-alerts localStorage key into cfg.notifications.enabled.
+  // Runs once cfg is loaded so we don't overwrite an explicit server-side preference with stale local state.
+  useEffect(() => {
+    if (!cfg || browserMigrationDoneRef.current) return;
+    let legacy: string | null = null;
+    try {
+      legacy = window.localStorage.getItem(BROWSER_ALERTS_LEGACY_KEY);
+    } catch {
+      // ignore storage failures
+    }
+    if (legacy === "false" && cfg.notifications?.enabled !== false) {
+      toggleNotificationsEnabled(false);
+    }
+    try {
+      window.localStorage.removeItem(BROWSER_ALERTS_LEGACY_KEY);
+    } catch {
+      // ignore storage failures
+    }
+    browserMigrationDoneRef.current = true;
+  }, [cfg]);
 
   useEffect(() => {
     if (!selected || !anyMilestones) return;
@@ -1174,7 +1185,9 @@ function App() {
 
   const quietHoursSummary = formatQuietHoursSummary(cfg?.quietHours);
   const desktopNotificationsSummary = notificationsEnabled ? "On" : "Off";
-  const browserAlertsSummary = browserAlertsEnabled ? "On" : "Off";
+  const browserAlertsActive =
+    notificationsEnabled && browserPermission === "granted";
+  const browserAlertsSummary = browserAlertsActive ? "On" : "Off";
   const backgroundSummary = backgroundMonitoringEnabled ? "On" : "Off";
   const installGuide = INSTALL_GUIDES[installGuidePlatform];
   const activeInstallStep = installGuide[installGuideStep] ?? installGuide[0];
@@ -1643,12 +1656,12 @@ function App() {
                           type="button"
                           className="utilityMain"
                           onClick={() =>
-                            browserAlertsEnabled
+                            browserAlertsActive
                               ? disableBrowserAlerts()
                               : enableBrowserAlerts()
                           }
                           aria-label={
-                            browserAlertsEnabled
+                            browserAlertsActive
                               ? "Disable browser alerts"
                               : "Enable browser alerts"
                           }
@@ -1662,20 +1675,20 @@ function App() {
                           <button
                             type="button"
                             className={`utilityIconBtn ${
-                              browserAlertsEnabled ? "on" : "off"
+                              browserAlertsActive ? "on" : "off"
                             }`}
                             aria-label={
-                              browserAlertsEnabled
+                              browserAlertsActive
                                 ? "Disable browser alerts"
                                 : "Enable browser alerts"
                             }
                             onClick={() =>
-                              browserAlertsEnabled
+                              browserAlertsActive
                                 ? disableBrowserAlerts()
                                 : enableBrowserAlerts()
                             }
                           >
-                            {browserAlertsEnabled ? (
+                            {browserAlertsActive ? (
                               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" fill="currentColor"/></svg>
                             ) : (
                               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
@@ -2683,11 +2696,20 @@ function App() {
                   <input
                     type="checkbox"
                     checked={notificationsEnabled}
-                    onChange={(e) =>
-                      toggleNotificationsEnabled(e.target.checked)
-                    }
+                    onChange={(e) => {
+                      if (desktopApp) {
+                        toggleNotificationsEnabled(e.target.checked);
+                      } else if (e.target.checked) {
+                        void enableBrowserAlerts();
+                      } else {
+                        disableBrowserAlerts();
+                      }
+                    }}
                   />
                 </label>
+                {!desktopApp && browserAlertsErr ? (
+                  <div className="notifNote alertsError">{browserAlertsErr}</div>
+                ) : null}
                 <label className="notifRow">
                   <span>Notification sound</span>
                   <input

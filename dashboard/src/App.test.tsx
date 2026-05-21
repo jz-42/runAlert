@@ -2173,4 +2173,218 @@ describe("App", () => {
     expect((badge as HTMLElement).textContent || "").toContain("Finish");
     expect((badge as HTMLElement).className).toContain("final");
   });
+
+  describe("notification toggle unification (browser)", () => {
+    type FakePermission = "default" | "granted" | "denied";
+
+    function installNotificationMock(initial: FakePermission) {
+      let permission: FakePermission = initial;
+      const requestPermission = vi.fn(async () => permission);
+      function NotificationCtor(this: any) {
+        // no-op stand-in for the Notification constructor in jsdom
+      }
+      Object.defineProperty(NotificationCtor, "permission", {
+        configurable: true,
+        get: () => permission,
+      });
+      Object.defineProperty(NotificationCtor, "requestPermission", {
+        configurable: true,
+        value: requestPermission,
+      });
+      (globalThis as any).Notification = NotificationCtor;
+      return {
+        setPermission(next: FakePermission) {
+          permission = next;
+        },
+        requestPermission,
+      };
+    }
+
+    function makeConfigFetch(initialCfg: any) {
+      const state = { cfg: structuredClone(initialCfg) };
+      // @ts-expect-error - test mock
+      globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+        const u = String(url);
+        const method = options?.method || "GET";
+        if (u.includes("/config") && method === "GET") {
+          return { ok: true, status: 200, json: async () => state.cfg };
+        }
+        if (u.includes("/config") && method === "PUT") {
+          state.cfg = JSON.parse(String(options?.body || "{}"));
+          return { ok: true, status: 200, json: async () => state.cfg };
+        }
+        if (u.includes("/profiles")) {
+          return { ok: true, status: 200, json: async () => ({ ok: true, profiles: {} }) };
+        }
+        if (u.includes("/twitch/status")) {
+          return { ok: true, status: 200, json: async () => ({ ok: true, statuses: {} }) };
+        }
+        if (u.includes("/status")) {
+          return { ok: true, status: 200, json: async () => ({ ok: true, statuses: {} }) };
+        }
+        return { ok: true, status: 200, json: async () => ({ ok: true }) };
+      });
+      return state;
+    }
+
+    afterEach(() => {
+      delete (globalThis as any).Notification;
+      window.localStorage.clear();
+    });
+
+    // Both the landing tile and the settings modal must reflect the same enabled state.
+    it("landing tile and settings modal share notifications.enabled", async () => {
+      installNotificationMock("granted");
+      makeConfigFetch({
+        streamers: ["xQcOW"],
+        clock: "IGT",
+        quietHours: [],
+        defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+        profiles: {},
+        notifications: { enabled: true, sound: true },
+      });
+
+      render(<App />);
+      await screen.findByText("xQcOW");
+
+      const landingTile = screen.getByTestId("header-browserAlerts");
+      expect(within(landingTile).getByText("On")).toBeTruthy();
+
+      // open settings → click "Notifications" menu entry → notifications subpanel
+      fireEvent.click(screen.getByLabelText("Open settings"));
+      fireEvent.click(await screen.findByRole("button", { name: "Notifications" }));
+
+      const dialog = await screen.findByRole("dialog", { name: "Notifications" });
+      const enableInput = within(dialog).getByRole("checkbox", { name: /Enable notifications/i });
+      expect((enableInput as HTMLInputElement).checked).toBe(true);
+
+      // turning it off in the modal flips the landing tile to Off
+      fireEvent.click(enableInput);
+      await waitFor(() => {
+        expect((enableInput as HTMLInputElement).checked).toBe(false);
+      });
+
+      await waitFor(() => {
+        const tile = screen.getByTestId("header-browserAlerts");
+        expect(within(tile).getByText("Off")).toBeTruthy();
+      });
+    });
+
+    // Enabling on a denied-permission browser still records intent but surfaces a warning.
+    it("denied browser permission keeps notifications enabled but shows warning", async () => {
+      installNotificationMock("denied");
+      makeConfigFetch({
+        streamers: ["xQcOW"],
+        clock: "IGT",
+        quietHours: [],
+        defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+        profiles: {},
+        notifications: { enabled: false, sound: true },
+      });
+
+      render(<App />);
+      await screen.findByText("xQcOW");
+
+      // Surface the warning that gets set on mount when permission === "denied".
+      expect(
+        await screen.findByText(
+          /Notifications are blocked in this browser/i
+        )
+      ).toBeTruthy();
+
+      const landingTile = screen.getByTestId("header-browserAlerts");
+      expect(within(landingTile).getByText("Off")).toBeTruthy();
+
+      // Clicking enable on the landing tile still flips intent on but tile stays Off (no permission).
+      fireEvent.click(within(landingTile).getAllByLabelText("Enable browser alerts")[0]);
+
+      await waitFor(() => {
+        const putCalls = (globalThis.fetch as any).mock.calls.filter(
+          ([url, options]: [string, RequestInit]) =>
+            String(url).includes("/config") && options?.method === "PUT"
+        );
+        expect(putCalls.length).toBeGreaterThan(0);
+        const lastPut = putCalls[putCalls.length - 1];
+        expect(JSON.parse(String(lastPut[1].body))).toMatchObject({
+          notifications: { enabled: true },
+        });
+      });
+
+      // Tile remains Off because browser permission is blocking delivery.
+      expect(within(landingTile).getByText("Off")).toBeTruthy();
+    });
+
+    // Granting permission via the landing tile flips both the tile and the modal to On.
+    it("granting permission from landing tile turns notifications on everywhere", async () => {
+      const perm = installNotificationMock("default");
+      makeConfigFetch({
+        streamers: ["xQcOW"],
+        clock: "IGT",
+        quietHours: [],
+        defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+        profiles: {},
+        notifications: { enabled: false, sound: true },
+      });
+
+      render(<App />);
+      await screen.findByText("xQcOW");
+
+      const landingTile = screen.getByTestId("header-browserAlerts");
+      expect(within(landingTile).getByText("Off")).toBeTruthy();
+
+      perm.requestPermission.mockImplementationOnce(async () => {
+        perm.setPermission("granted");
+        return "granted";
+      });
+
+      fireEvent.click(within(landingTile).getAllByLabelText("Enable browser alerts")[0]);
+
+      await waitFor(() => {
+        const tile = screen.getByTestId("header-browserAlerts");
+        expect(within(tile).getByText("On")).toBeTruthy();
+      });
+
+      // PUT /config should reflect notifications.enabled=true.
+      const putCalls = (globalThis.fetch as any).mock.calls.filter(
+        ([url, options]: [string, RequestInit]) =>
+          String(url).includes("/config") && options?.method === "PUT"
+      );
+      const lastPut = putCalls[putCalls.length - 1];
+      expect(JSON.parse(String(lastPut[1].body))).toMatchObject({
+        notifications: { enabled: true },
+      });
+    });
+
+    // Legacy localStorage opt-out must migrate into cfg.notifications.enabled.
+    it("migrates legacy runalert-browser-alerts=false into notifications.enabled=false", async () => {
+      installNotificationMock("granted");
+      window.localStorage.setItem("runalert-browser-alerts", "false");
+      makeConfigFetch({
+        streamers: ["xQcOW"],
+        clock: "IGT",
+        quietHours: [],
+        defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+        profiles: {},
+        // notifications field intentionally omitted to simulate older config
+      });
+
+      render(<App />);
+      await screen.findByText("xQcOW");
+
+      await waitFor(() => {
+        const putCalls = (globalThis.fetch as any).mock.calls.filter(
+          ([url, options]: [string, RequestInit]) =>
+            String(url).includes("/config") && options?.method === "PUT"
+        );
+        expect(putCalls.length).toBeGreaterThan(0);
+        const lastPut = putCalls[putCalls.length - 1];
+        expect(JSON.parse(String(lastPut[1].body))).toMatchObject({
+          notifications: { enabled: false },
+        });
+      });
+
+      // legacy key is removed after migration
+      expect(window.localStorage.getItem("runalert-browser-alerts")).toBeNull();
+    });
+  });
 });
