@@ -187,13 +187,14 @@ a.tag:hover{
   gap: 0;
 }
 
-.brandArtSlot{
-  position: relative;
+.brandMark{
+  position: fixed;
+  top: clamp(8px, 1.5vw, 18px);
+  left: clamp(10px, 2vw, 28px);
   width: clamp(130px, 12vw, 180px);
   height: clamp(90px, 9vw, 130px);
-  flex: 0 0 auto;
-  overflow: visible;
-  margin-right: -8px;
+  z-index: 10;
+  pointer-events: none;
 }
 
 .brandText{
@@ -226,12 +227,7 @@ a.tag:hover{
 
 @media (max-width: 900px){
   .titleDragon{ display: none; }
-  .brandArtSlot{ display: none; }
-  .settingsGear{
-    position: absolute;
-    top: 0;
-    right: 0;
-  }
+  .brandMark{ display: none; }
 }
 
 .metaRow{
@@ -269,9 +265,7 @@ a.tag:hover{
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  align-self: stretch;
-  justify-content: flex-start;
-  transform: translateY(-2px);
+  justify-content: center;
 }
 
 .utilityCard{
@@ -703,24 +697,22 @@ a.tag:hover{
 
 .milestoneBadge{
   position: absolute;
-  right: -10px;
-  top: 108px;
+  right: -14px;
+  top: 106px;
   z-index: 3;
-  height: 26px;
-  min-width: 66px;
-  padding: 0 11px;
-  border-radius: 10px;
-  background: rgba(10, 10, 16, 0.94);
-  backdrop-filter: blur(8px);
+  height: 30px;
+  min-width: 84px;
+  padding: 0 16px;
+  border-radius: 15px;
+  background: rgba(14, 14, 22, 0.95);
+  backdrop-filter: blur(10px);
   color: rgba(245, 248, 254, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow:
-    0 6px 22px rgba(0, 0, 0, 0.55),
-    0 0 0 2px rgba(9, 9, 14, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
   display: grid;
   place-items: center;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 12.5px;
   letter-spacing: 0;
   white-space: nowrap;
   pointer-events: none;
@@ -732,13 +724,10 @@ a.tag:hover{
 
 .milestoneBadge.final{
   animation: none;
-  background: rgba(10, 10, 16, 0.94);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(14, 14, 22, 0.95);
+  border-color: rgba(255, 255, 255, 0.14);
   color: rgba(245, 248, 254, 1);
-  box-shadow:
-    0 6px 22px rgba(0, 0, 0, 0.55),
-    0 0 0 2px rgba(9, 9, 14, 0.55),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
 }
 
 @keyframes badgeBreathe{
