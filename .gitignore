@@ -1,6 +1,7 @@
 .DS_Store
 .claude/
 .conductor/
+private/
 sent_keys.json
 VISION.md
 LAUNCH_WEEK_PLAN.md
@@ -11,10 +12,8 @@ ecosystem.config.cjs
 notify/discord.js
 scripts/publish-beta.sh
 
-# Local backups and scratch areas
-dev_nested_backup/
-dev/
-beta/
+# Local-only private area
+private/
 
 # Dependencies
 node_modules/
