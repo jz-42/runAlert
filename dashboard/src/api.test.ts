@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   __resetApiTestState,
+  getTwitchStatuses,
   getTwitchStatusBase,
   getProfiles,
   getStatuses,
@@ -93,6 +94,32 @@ describe("dashboard api helpers", () => {
     vi.stubEnv("RUNALERT_ELECTRON_DEV", "1");
 
     expect(getTwitchStatusBase()).toBe("");
+  });
+
+  it("uses the current site origin for browser twitch-status requests when no env base is set", async () => {
+    const expectedBase = window.location.origin;
+    const fetchMock = vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        statuses: {
+          BadGamer: { isTwitchLive: true, twitch: "Jay12310" },
+        },
+      }),
+    }));
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const result = await getTwitchStatuses(["BadGamer"]);
+
+    expect(String(fetchMock.mock.calls[0]?.[0] || "")).toBe(
+      `${expectedBase}/twitch/status?names=BadGamer`
+    );
+    expect(result).toEqual({
+      ok: true,
+      statuses: {
+        BadGamer: { isTwitchLive: true, twitch: "Jay12310" },
+      },
+    });
   });
 
   it("PUTs config to the tokenized endpoint and re-fetches canonical config", async () => {

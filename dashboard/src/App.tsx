@@ -1,7 +1,6 @@
 import "./App.css";
 
 import React, { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 import {
   API_BASE,
   getConfig,
@@ -30,7 +29,7 @@ type Config = {
   };
   agent?: {
     autoUpdate?: boolean;
-    forsenOcr?: boolean;
+    backgroundMonitoring?: boolean;
   };
 };
 
@@ -48,7 +47,7 @@ function splitMMSS(thresholdSec?: number): { mm: string; ss: string } {
   return { mm: String(mm), ss: String(ss).padStart(2, "0") };
 }
 
-const APP_VERSION = "0.1";
+const APP_VERSION = "0.2";
 const APP_CHANNEL = "Beta";
 const MAX_STREAMERS = 15;
 const MAX_QUIET_SPANS = 3;
@@ -57,10 +56,134 @@ const BROWSER_ALERTS_DEDUPE_KEY = "runalert-browser-alerts-dedupe";
 const ONBOARDING_DISMISSED_KEY = "runalert-onboarding-dismissed";
 const APP_FIRST_OPENED_KEY = "runalert-app-first-opened";
 const DESKTOP_BG_RUNNING_KEY = "runalert-desktop-background-running";
+const GITHUB_REPO_URL = "https://github.com/jz-42/runAlert";
+const GITHUB_BETA_RELEASE_URL =
+  "https://github.com/jz-42/runAlert/releases/tag/v0.1.0-beta.2";
 
 type AmPm = "AM" | "PM";
 type Time12 = { hh: string; mm: string; ampm: AmPm };
 type QuietSpanDraft = { start: Time12; end: Time12 };
+type InstallGuidePlatform = "mac" | "windows";
+type InstallGuideStep = {
+  eyebrow: string;
+  title: string;
+  body: React.ReactNode;
+  details?: React.ReactNode[];
+  note?: React.ReactNode;
+  imageSrc?: string;
+  imageAlt?: string;
+};
+
+const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
+  mac: [
+    {
+      eyebrow: "Step 1",
+      title: "Download runAlert",
+      body: (
+        <>
+          Click Download DMG (
+          <span className="installGuideEmphasisDownload">
+            runAlert-0.1.0-beta.2-arm64.dmg
+          </span>
+          ).
+        </>
+      ),
+      details: [
+        "The download comes from runalert.app and the public GitHub release for jz-42/runAlert.",
+        "No account required.",
+      ],
+      note: (
+        <>
+          <span className="installGuideNoteLabel">
+            ⚠️ Important Security Note:
+          </span>{" "}
+          To verify this app is safe, send the{" "}
+          <a
+            className="installGuideInlineLink"
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            public source code
+          </a>{" "}
+          link to your preferred AI and upload your{" "}
+          <span className="installGuideEmphasisDownload">download file</span> to
+          scan for anything malicious. For a manual check, you can also review
+          the{" "}
+          <a
+            className="installGuideInlineLink"
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            public source code
+          </a>{" "}
+          yourself and verify the{" "}
+          <a
+            className="installGuideInlineLink installGuideInlineLink--checksum"
+            href={GITHUB_BETA_RELEASE_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            checksum
+          </a>{" "}
+          matches your download.
+        </>
+      ),
+      imageSrc: "/install-guide/step-1-downloaded-dmg.png",
+      imageAlt: "Downloaded runAlert disk image shown in the macOS downloads area",
+    },
+    {
+      eyebrow: "Step 2",
+      title: "Open the DMG and drag runAlert to Applications",
+      body: "Open the downloaded file, then drag runAlert into Applications.",
+      imageSrc: "/install-guide/step-2-drag-to-applications.png",
+      imageAlt: "runAlert disk image showing the app being dragged into Applications",
+    },
+    {
+      eyebrow: "Step 3",
+      title: "Try opening runAlert",
+      body:
+        "Open runAlert from Applications. macOS may say Apple cannot verify the app.",
+      details: [
+        "That warning is expected for this beta because the app is unsigned by Apple.",
+      ],
+      imageSrc: "/install-guide/step-3-gatekeeper-warning.png",
+      imageAlt: "macOS gatekeeper warning shown when first opening runAlert",
+    },
+    {
+      eyebrow: "Step 4",
+      title: "Click Open Anyway",
+      body:
+        "Given that you've verified security yourself, feel free to override this. If your Mac blocks it, go to Settings → Privacy & Security and click Open Anyway. Then open the app again.",
+      imageSrc: "/install-guide/step-4-open-anyway.png",
+      imageAlt: "macOS Privacy & Security page showing the Open Anyway button for runAlert",
+    },
+  ],
+  windows: [
+    {
+      eyebrow: "Step 1",
+      title: "Download runAlert",
+      body: "Click Download EXE.",
+    },
+    {
+      eyebrow: "Step 2",
+      title: "Open the installer",
+      body: "Run the installer and follow the prompts.",
+    },
+    {
+      eyebrow: "Step 3",
+      title: "Turn on notifications",
+      body: "Turn on notifications for runAlert in Windows.",
+    },
+  ],
+};
+
+const SPECIAL_STREAMER_AVATARS: Record<string, string> = {
+  stableronaldo: "/special-streamers/stableronaldo.png",
+  forsen: "/special-streamers/forsen.png",
+  ohnepixel: "/special-streamers/ohnepixel.png",
+};
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -153,16 +276,31 @@ function formatQuietHoursSummary(q: Config["quietHours"]): string {
     if (!d) continue;
     parts.push(`${formatTime12(d.start)}–${formatTime12(d.end)}`);
   }
-  if (!parts.length) return "Set quiet hours";
-  return parts.join(", ");
+  if (!parts.length) return "None";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} +${parts.length - 1}`;
 }
 
 function defaultQuietSpan(): QuietSpanDraft {
-  // A reasonable starting point (common DND pattern).
   return {
-    start: { hh: "9", mm: "00", ampm: "PM" },
-    end: { hh: "9", mm: "00", ampm: "AM" },
+    start: { hh: "10", mm: "00", ampm: "PM" },
+    end: { hh: "7", mm: "00", ampm: "AM" },
   };
+}
+
+function stripLegacyForsenConfig(config: Config): Config {
+  const next = structuredClone(config);
+  const agent = next.agent as ({ autoUpdate?: boolean } & {
+    forsenOcr?: boolean;
+  }) | null | undefined;
+  if (!agent || !Object.prototype.hasOwnProperty.call(agent, "forsenOcr")) {
+    return next;
+  }
+  delete agent.forsenOcr;
+  if (!Object.keys(agent).length) {
+    delete next.agent;
+  }
+  return next;
 }
 
 function App() {
@@ -178,6 +316,9 @@ function App() {
     null
   );
   const [showInstallDetails, setShowInstallDetails] = useState(false);
+  const [installGuidePlatform, setInstallGuidePlatform] =
+    useState<InstallGuidePlatform>("mac");
+  const [installGuideStep, setInstallGuideStep] = useState(0);
   const [addStreamerName, setAddStreamerName] = useState("");
   const [addStreamerErr, setAddStreamerErr] = useState<string | null>(null);
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
@@ -201,6 +342,10 @@ function App() {
   const [quietDraft, setQuietDraft] = useState<QuietSpanDraft[]>([]);
   const [quietErr, setQuietErr] = useState<string | null>(null);
   const [quietSaving, setQuietSaving] = useState(false);
+  const [quietSaved, setQuietSaved] = useState(false);
+  const [confirmRemoveQH, setConfirmRemoveQH] = useState<number | null>(null);
+  const [milestoneSaved, setMilestoneSaved] = useState(false);
+  const milestoneSavedTimerRef = useRef<number | null>(null);
   const [statusByName, setStatusByName] = useState<
     Record<
       string,
@@ -234,10 +379,34 @@ function App() {
     Record<string, { avatarUrl: string | null; twitch?: string | null }>
   >({});
 
+  const [dragCandidate, setDragCandidate] = useState<{
+    index: number;
+    name: string;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [dragState, setDragState] = useState<{
+    index: number;
+    name: string;
+    x: number;
+    y: number;
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    height: number;
+    insertIndex: number;
+  } | null>(null);
+
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratingDraftRef = useRef(false);
   const queuedSaveRef = useRef(false);
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const suppressOpenRef = useRef(false);
   const browserAlertDedupeRef = useRef<
     Record<string, { runId: number | null; milestones: Record<string, boolean> }>
   >({});
@@ -271,6 +440,8 @@ function App() {
   const appDownloadBase = API_BASE || "";
   const macAppDownloadUrl = `${appDownloadBase}/download/macos/dmg`;
   const macAppZipUrl = `${appDownloadBase}/download/macos/zip`;
+  const windowsAppDownloadUrl = `${appDownloadBase}/download/windows/exe`;
+  const streamers: string[] = cfg?.streamers ?? [];
 
   const milestoneEntries = Object.entries(draft);
   const anyMilestones = milestoneEntries.length > 0;
@@ -280,7 +451,11 @@ function App() {
   const notificationsEnabled = cfg?.notifications?.enabled ?? true;
   const notificationSoundEnabled = cfg?.notifications?.sound ?? true;
   const agentAutoUpdateEnabled = cfg?.agent?.autoUpdate ?? false;
-  const forsenOcrEnabled = cfg?.agent?.forsenOcr ?? false;
+  const backgroundMonitoringEnabled = cfg?.agent?.backgroundMonitoring ?? false;
+
+  function applyConfig(next: Config) {
+    setCfg(stripLegacyForsenConfig(next));
+  }
 
   function getTwitchUrl(name: string) {
     const raw =
@@ -297,6 +472,14 @@ function App() {
     const handle = String(name || "").trim();
     if (!handle) return null;
     return `https://paceman.gg/stats/player/${encodeURIComponent(handle)}/runs/`;
+  }
+
+  function getAvatarSrc(name: string): string | null {
+    const normalized = String(name || "").trim().toLowerCase();
+    if (normalized && SPECIAL_STREAMER_AVATARS[normalized]) {
+      return SPECIAL_STREAMER_AVATARS[normalized];
+    }
+    return profileByName[name]?.avatarUrl ?? null;
   }
 
   function isStreamerLive(name: string): boolean {
@@ -362,6 +545,50 @@ function App() {
   function disableBrowserAlerts() {
     setBrowserAlertsErr(null);
     persistBrowserAlerts(false);
+  }
+
+  function updateNotificationPrefs({
+    enabled = notificationsEnabled,
+    sound = notificationSoundEnabled,
+  }: {
+    enabled?: boolean;
+    sound?: boolean;
+  }) {
+    if (!cfg) return;
+    const updated = structuredClone(cfg);
+    updated.notifications = {
+      ...(updated.notifications || {}),
+      enabled,
+      sound,
+    };
+    applyConfig(updated);
+    setErr(null);
+    void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
+      setErr(e?.message ?? String(e))
+    );
+  }
+
+  function toggleNotificationsEnabled(next: boolean) {
+    updateNotificationPrefs({ enabled: next });
+  }
+
+  function toggleNotificationSound(next: boolean) {
+    updateNotificationPrefs({ sound: next });
+  }
+
+  function updateBackgroundMonitoring(next: boolean) {
+    if (!cfg) return;
+    const updated = structuredClone(cfg);
+    updated.agent = {
+      ...(updated.agent || {}),
+      autoUpdate: updated.agent?.autoUpdate ?? agentAutoUpdateEnabled,
+      backgroundMonitoring: next,
+    };
+    applyConfig(updated);
+    setErr(null);
+    void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
+      setErr(e?.message ?? String(e))
+    );
   }
 
   function dismissOnboarding() {
@@ -583,22 +810,22 @@ function App() {
     // Optimistic UI update
     const optimistic: Config = structuredClone(cfg);
     optimistic.streamers = [...(optimistic.streamers ?? []), name];
-    setCfg(optimistic);
+    applyConfig(optimistic);
     setErr(null);
 
     // Close modal immediately for a snappy feel
     setShowAddStreamer(false);
 
     try {
-      const saved = await putConfig(optimistic);
-      setCfg(saved);
+      const saved = await putConfig(stripLegacyForsenConfig(optimistic));
+      applyConfig(saved);
       void trackEvent("streamer_added", { streamer: name });
     } catch (e: any) {
       setErr(e?.message ?? String(e));
       // Roll back to canonical config if save fails
       try {
         const latest = await getConfig();
-        setCfg(latest);
+        applyConfig(latest);
       } catch {
         // keep existing error
       }
@@ -629,7 +856,7 @@ function App() {
     if (optimistic.profiles?.[name]) {
       delete optimistic.profiles[name];
     }
-    setCfg(optimistic);
+    applyConfig(optimistic);
     setErr(null);
 
     // Close the panel if this streamer was selected
@@ -638,15 +865,15 @@ function App() {
     }
 
     try {
-      const saved = await putConfig(optimistic);
-      setCfg(saved);
+      const saved = await putConfig(stripLegacyForsenConfig(optimistic));
+      applyConfig(saved);
       void trackEvent("streamer_removed", { streamer: name });
     } catch (e: any) {
       setErr(e?.message ?? String(e));
       // Roll back to canonical config if save fails
       try {
         const latest = await getConfig();
-        setCfg(latest);
+        applyConfig(latest);
       } catch {
         // keep existing error
       }
@@ -655,7 +882,7 @@ function App() {
 
   useEffect(() => {
     getConfig()
-      .then(setCfg)
+      .then(applyConfig)
       .catch((e) => setErr(e?.message ?? String(e)));
   }, []);
 
@@ -800,8 +1027,8 @@ function App() {
         };
       }
 
-      const saved = await putConfig(next);
-      setCfg(saved);
+      const saved = await putConfig(stripLegacyForsenConfig(next));
+      applyConfig(saved);
       void trackEvent("milestone_edited", {
         streamer: selected,
         reason,
@@ -848,8 +1075,210 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, selected]);
 
-  const streamers: string[] = cfg?.streamers ?? [];
+  useEffect(() => {
+    if (!dragCandidate && !dragState) return;
+
+    function handlePointerMove(e: PointerEvent) {
+      if (dragState) {
+        setDragState((cur) =>
+          cur
+            ? {
+                ...cur,
+                x: e.clientX,
+                y: e.clientY,
+                insertIndex: getDragInsertIndex(
+                  e.clientX,
+                  e.clientY,
+                  cur.index
+                ),
+              }
+            : cur
+        );
+        return;
+      }
+
+      if (!dragCandidate) return;
+      const moved = Math.hypot(
+        e.clientX - dragCandidate.startX,
+        e.clientY - dragCandidate.startY
+      );
+      if (moved < 8) return;
+
+      suppressOpenRef.current = true;
+      setDragState({
+        index: dragCandidate.index,
+        name: dragCandidate.name,
+        x: e.clientX,
+        y: e.clientY,
+        offsetX: dragCandidate.offsetX,
+        offsetY: dragCandidate.offsetY,
+        width: dragCandidate.width,
+        height: dragCandidate.height,
+        insertIndex: getDragInsertIndex(
+          e.clientX,
+          e.clientY,
+          dragCandidate.index
+        ),
+      });
+      setDragCandidate(null);
+    }
+
+    function finishDrag() {
+      setDragState((cur) => {
+        if (cur) {
+          reorderStreamers(cur.index, cur.insertIndex);
+        }
+        return null;
+      });
+      if (dragCandidate || dragState) {
+        window.setTimeout(() => {
+          suppressOpenRef.current = false;
+        }, 0);
+      }
+      setDragCandidate(null);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointercancel", finishDrag);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishDrag);
+      window.removeEventListener("pointercancel", finishDrag);
+    };
+  }, [dragCandidate, dragState, streamers]);
+
+  function getReorderedStreamers(
+    fromIdx: number,
+    insertIndex: number,
+    names: string[]
+  ) {
+    const next = [...names];
+    if (fromIdx < 0 || fromIdx >= next.length) return next;
+    const clampedInsert = Math.max(0, Math.min(next.length, insertIndex));
+    const targetIdx = clampedInsert > fromIdx ? clampedInsert - 1 : clampedInsert;
+    if (targetIdx === fromIdx) return next;
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(targetIdx, 0, moved);
+    return next;
+  }
+
+  const reorderStreamers = (fromIdx: number, insertIndex: number) => {
+    if (!cfg) return;
+    const current = cfg.streamers ?? [];
+    const next = getReorderedStreamers(fromIdx, insertIndex, current);
+    if (next.every((name, idx) => name === current[idx])) return;
+    const updated = { ...cfg, streamers: next };
+    applyConfig(updated);
+    void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
+      setErr(e?.message ?? String(e))
+    );
+  };
+
   const quietHoursSummary = formatQuietHoursSummary(cfg?.quietHours);
+  const desktopNotificationsSummary = notificationsEnabled ? "On" : "Off";
+  const browserAlertsSummary = browserAlertsEnabled ? "On" : "Off";
+  const backgroundSummary = backgroundMonitoringEnabled ? "On" : "Off";
+  const installGuide = INSTALL_GUIDES[installGuidePlatform];
+  const activeInstallStep = installGuide[installGuideStep] ?? installGuide[0];
+  const guidePrimaryUrl =
+    installGuidePlatform === "mac" ? macAppDownloadUrl : windowsAppDownloadUrl;
+  const guidePrimaryLabel =
+    installGuidePlatform === "mac" ? "Download DMG" : "Download EXE";
+
+  function setTileRef(name: string, node: HTMLDivElement | null) {
+    tileRefs.current[name] = node;
+  }
+
+  function getOrderedTileRects() {
+    return streamers.map(
+      (name) => tileRefs.current[name]?.getBoundingClientRect() ?? null
+    );
+  }
+
+  function getDragInsertIndex(
+    clientX: number,
+    clientY: number,
+    fallback: number
+  ) {
+    const rects = getOrderedTileRects();
+    let bestIndex = fallback;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    rects.forEach((rect, idx) => {
+      if (!rect) return;
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = clientX - cx;
+      const dy = clientY - cy;
+      const distance = dx * dx + dy * dy;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = idx;
+      }
+    });
+
+    const nearestRect = rects[bestIndex];
+    if (!nearestRect) return fallback;
+    const centerX = nearestRect.left + nearestRect.width / 2;
+    const centerY = nearestRect.top + nearestRect.height / 2;
+    const before =
+      Math.abs(clientY - centerY) > Math.abs(clientX - centerX)
+        ? clientY < centerY
+        : clientX < centerX;
+    const rawInsertIndex = before ? bestIndex : bestIndex + 1;
+    return Math.max(0, Math.min(streamers.length, rawInsertIndex));
+  }
+
+  function getTilePreviewStyle(
+    name: string,
+    idx: number
+  ): React.CSSProperties | undefined {
+    if (!dragState || idx === dragState.index) return undefined;
+
+    const rects = getOrderedTileRects();
+    const sourceRect = rects[idx];
+    if (!sourceRect) return undefined;
+
+    const previewNames = getReorderedStreamers(
+      dragState.index,
+      dragState.insertIndex,
+      streamers
+    );
+    const previewIndex = previewNames.indexOf(name);
+    const targetRect = rects[previewIndex];
+    if (!targetRect) return undefined;
+
+    const dx = targetRect.left - sourceRect.left;
+    const dy = targetRect.top - sourceRect.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return undefined;
+
+    return {
+      transform: `translate(${dx}px, ${dy}px)`,
+      zIndex: 3,
+    };
+  }
+
+  function beginPointerDrag(
+    e: React.PointerEvent<HTMLButtonElement>,
+    index: number,
+    name: string
+  ) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setDragCandidate({
+      index,
+      name,
+      startX: e.clientX,
+      startY: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+    });
+  }
 
   function getNetherCutoffSec(name: string): number | null {
     if (!cfg) return null;
@@ -892,6 +1321,16 @@ function App() {
     }
 
     return out;
+  }
+
+  function openInstallGuide(platform: InstallGuidePlatform) {
+    setInstallGuidePlatform(platform);
+    setInstallGuideStep(0);
+    setShowInstallDetails(true);
+    void trackEvent("help_opened", {
+      surface: "download-hub",
+      platform,
+    });
   }
 
   function milestoneBadgeText(milestone: string): string {
@@ -1049,54 +1488,266 @@ function App() {
 
   return (
     <div className="page">
+      <div
+        className="brandMark"
+        data-testid="header-artSlot"
+        aria-hidden="true"
+      >
+        <span className="titleDragon" data-testid="header-dragon" />
+      </div>
       <div className="frame" data-testid="header-frame">
         <div className="titleRow" data-testid="header-titleRow">
           <div className="titleLeft">
             <div className="brandRow" data-testid="header-brandRow">
-              <div
-                className="brandArtSlot"
-                data-testid="header-artSlot"
-                aria-hidden="true"
-              >
-                <span className="titleDragon" data-testid="header-dragon" />
-              </div>
               <div className="brandText">
                 <div className="titleLine">
                   <h1 className="appTitle" data-testid="header-title">
                     Minecraft Speedrun Notifier
                   </h1>
-                  <span className="tag">
-                    {APP_CHANNEL}
-                  </span>
+                  <div className="metaRow" data-testid="header-meta">
+                    <a
+                      className="tag"
+                      href={GITHUB_REPO_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {APP_CHANNEL}
+                    </a>
+                    <span className="metaWarn">⚠ Possible bugs</span>
+                  </div>
                 </div>
-                <div className="metaRow" data-testid="header-meta">
-                  <span className="metaVersion">v{APP_VERSION}</span>
-                  <button
-                    type="button"
-                    className="quietHoursPill"
-                    onClick={openQuietHoursEditor}
-                    aria-label="Edit quiet hours"
-                    data-testid="header-quietHours"
-                    title="During quiet hours, runAlert keeps monitoring but does not send notifications."
-                  >
-                    Quiet Hours: {quietHoursSummary}
-                  </button>
+                <div className="utilityRow" data-testid="header-utilityRow">
+                  {desktopApp ? (
+                    <>
+                      <div className="utilityCard" data-testid="header-notifications">
+                        <button
+                          type="button"
+                          className="utilityMain"
+                          onClick={() => setShowNotifications(true)}
+                          aria-label="Open notifications settings"
+                        >
+                          <span className="utilityEyebrow">Notifications</span>
+                          <span className="utilityValue">
+                            {desktopNotificationsSummary}
+                          </span>
+                        </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${
+                              notificationsEnabled ? "on" : "off"
+                            }`}
+                            aria-label={
+                              notificationsEnabled
+                                ? "Disable notifications"
+                                : "Enable notifications"
+                            }
+                            onClick={() =>
+                              toggleNotificationsEnabled(!notificationsEnabled)
+                            }
+                          >
+                            {notificationsEnabled ? (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" fill="currentColor"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${
+                              notificationSoundEnabled ? "on" : "off"
+                            }`}
+                            aria-label={
+                              notificationSoundEnabled
+                                ? "Turn notification sound off"
+                                : "Turn notification sound on"
+                            }
+                            onClick={() =>
+                              toggleNotificationSound(!notificationSoundEnabled)
+                            }
+                          >
+                            {notificationSoundEnabled ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="utilityCard">
+                        <button
+                          type="button"
+                          className="utilityMain"
+                          onClick={openQuietHoursEditor}
+                          aria-label="Edit quiet hours"
+                          data-testid="header-quietHours"
+                          title="During quiet hours, runAlert keeps monitoring but does not send notifications."
+                        >
+                          <span className="utilityEyebrow">Quiet Hours</span>
+                          <span className="utilityValue">{quietHoursSummary}</span>
+                        </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${quietHoursSummary !== "None" ? "moon-on" : "moon-off"}`}
+                            aria-label="Edit quiet hours"
+                            onClick={openQuietHoursEditor}
+                          >
+                            {quietHoursSummary !== "None" ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="utilityCard" data-testid="header-background">
+                        <button
+                          type="button"
+                          className="utilityMain"
+                          onClick={() => setShowAgentSettings(true)}
+                          aria-label="Open background monitoring settings"
+                        >
+                          <span className="utilityEyebrow">Background Monitoring</span>
+                          <span className="utilityValue">{backgroundSummary}</span>
+                        </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${
+                              backgroundMonitoringEnabled
+                                ? "radar-on"
+                                : "radar-off"
+                            }`}
+                            aria-label={
+                              backgroundMonitoringEnabled
+                                ? "Disable background monitoring"
+                                : "Enable background monitoring"
+                            }
+                            onClick={() =>
+                              updateBackgroundMonitoring(!backgroundMonitoringEnabled)
+                            }
+                          >
+                            {backgroundMonitoringEnabled ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><path d="M12 5.5a6.5 6.5 0 0 1 6.5 6.5"/><path d="M12 2.5A9.5 9.5 0 0 1 21.5 12"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><path d="M12 4.5A7.5 7.5 0 0 1 19.5 12"/></svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="utilityCard" data-testid="header-browserAlerts">
+                        <button
+                          type="button"
+                          className="utilityMain"
+                          onClick={() =>
+                            browserAlertsEnabled
+                              ? disableBrowserAlerts()
+                              : enableBrowserAlerts()
+                          }
+                          aria-label={
+                            browserAlertsEnabled
+                              ? "Disable browser alerts"
+                              : "Enable browser alerts"
+                          }
+                        >
+                          <span className="utilityEyebrow">Browser Alerts</span>
+                          <span className="utilityValue">
+                            {browserAlertsSummary}
+                          </span>
+                        </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${
+                              browserAlertsEnabled ? "on" : "off"
+                            }`}
+                            aria-label={
+                              browserAlertsEnabled
+                                ? "Disable browser alerts"
+                                : "Enable browser alerts"
+                            }
+                            onClick={() =>
+                              browserAlertsEnabled
+                                ? disableBrowserAlerts()
+                                : enableBrowserAlerts()
+                            }
+                          >
+                            {browserAlertsEnabled ? (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" fill="currentColor"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.2"/></svg>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${
+                              notificationSoundEnabled ? "on" : "off"
+                            }`}
+                            aria-label={
+                              notificationSoundEnabled
+                                ? "Turn notification sound off"
+                                : "Turn notification sound on"
+                            }
+                            onClick={() =>
+                              toggleNotificationSound(!notificationSoundEnabled)
+                            }
+                          >
+                            {notificationSoundEnabled ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14"/><path d="M15.54 8.46a5 5 0 010 7.07"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="utilityCard">
+                        <button
+                          type="button"
+                          className="utilityMain"
+                          onClick={openQuietHoursEditor}
+                          aria-label="Edit quiet hours"
+                          data-testid="header-quietHours"
+                          title="During quiet hours, runAlert keeps monitoring but does not send notifications."
+                        >
+                          <span className="utilityEyebrow">Quiet Hours</span>
+                          <span className="utilityValue">{quietHoursSummary}</span>
+                        </button>
+                        <div className="utilityActions">
+                          <button
+                            type="button"
+                            className={`utilityIconBtn ${quietHoursSummary !== "None" ? "moon-on" : "moon-off"}`}
+                            aria-label="Edit quiet hours"
+                            onClick={openQuietHoursEditor}
+                          >
+                            {quietHoursSummary !== "None" ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <div className="betaDisclaimer">
-              Beta preview: possible bugs. Settings are saved{" "}
-              {desktopApp ? "on this device." : "per browser."}
                 </div>
               </div>
-            </div>
             {statusErr ? (
-              <div style={{ marginTop: 6, color: "#ffb86b", fontSize: 14 }}>
+              <div className="statusWarn">
                 {statusErr}
               </div>
             ) : null}
           </div>
 
           <button
-            className="iconBtn"
+            className="iconBtn settingsGear"
             aria-label="Open settings"
             onClick={() => setShowSettings(true)}
           >
@@ -1114,29 +1765,16 @@ function App() {
         </div>
 
         {err ? (
-          <div style={{ color: "#ff6b6b", marginTop: 12 }}>{err}</div>
+          <div className="configError">{err}</div>
         ) : null}
         {!cfg ? (
-          <div style={{ marginTop: 12, color: "#999" }}>Loading config…</div>
+          <div className="loadingText">Loading config…</div>
         ) : null}
 
         {selected && cfg ? (
-          <div
-            style={{
-              marginTop: 18,
-              padding: 16,
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(255,255,255,0.04)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
+          <div className="qhOverlay" onClick={() => setSelected(null)}>
+          <div className="milestonePanel" onClick={(e) => e.stopPropagation()}>
+            <div className="milestonePanelHeader">
               <a
                 className={`label labelLink labelRow panelName ${
                   isStreamerLive(selected) ? "labelLive" : ""
@@ -1148,21 +1786,34 @@ function App() {
               >
                 <span>{selected}</span>
                 {isStreamerLive(selected) ? (
-                  <span className="liveDot on" aria-hidden="true" />
+                  <span
+                    className="liveDot on"
+                    aria-label="Live on Twitch"
+                    title="Live on Twitch"
+                  />
                 ) : null}
               </a>
-              <div style={{ display: "flex", gap: 10 }}>
+              <div className="milestonePanelActions">
                 <button
+                  type="button"
+                  className="removeStreamerBtn"
+                  aria-label="Remove streamer"
+                  title="Remove streamer"
                   onClick={() => removeStreamer(selected)}
-                  style={{ height: 36, borderRadius: 10 }}
                 >
-                  Remove
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                    <path d="M4.5 2H11.5M2 4H14M12.667 4L12.111 12.067C12.048 12.956 11.296 13.667 10.405 13.667H5.595C4.704 13.667 3.952 12.956 3.889 12.067L3.333 4M6.333 7.333V10.667M9.667 7.333V10.667" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </button>
                 <button
+                  type="button"
+                  className="closeStreamerBtn"
+                  aria-label="Close"
                   onClick={() => setSelected(null)}
-                  style={{ height: 36, borderRadius: 10 }}
                 >
-                  Close
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z" fill="currentColor"/>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -1175,12 +1826,12 @@ function App() {
               >
                 Paceman
               </a>{" "}
-              split times can drift vs in-VOD IGT. Add a small buffer (about a
-              minute) to your thresholds for safety.
+              split times can drift vs real IGT. Add a small buffer to your
+              thresholds for safety.
             </div>
 
             <div className="milestoneAllRow">
-              <div>All milestones</div>
+              <span className="milestoneAllLabel">All milestones</span>
               <label className="milestoneAllToggle">
                 <input
                   type="checkbox"
@@ -1199,11 +1850,10 @@ function App() {
                     });
                   }}
                 />
-                {allToggleOn ? "all on" : "all off"}
               </label>
             </div>
 
-            <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            <div className="milestoneGrid">
               {Object.entries(draft).map(([milestone, mcfg]) => {
                 const enabled = mcfg.enabled ?? true;
                 const value = mcfg.thresholdSec;
@@ -1217,19 +1867,109 @@ function App() {
                     className="milestoneRow"
                     style={{ opacity: enabled ? 1 : 0.55 }}
                   >
-                    <div style={{ fontSize: 18 }}>
+                    <div className="milestoneLabel">
                       {milestoneLabel(milestone)}
                     </div>
 
                     <div className="milestoneControls">
-                      <label
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          color: "#bdbdbd",
-                        }}
-                      >
+                      <div className="timeInputs">
+                        <span className="timePrefix">&le;</span>
+
+                        <input
+                          type="number"
+                          aria-label={`${milestone}-minutes`}
+                          value={mm}
+                          placeholder="0"
+                          min={0}
+                          step={1}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const cur = draft[milestone]?.thresholdSec;
+                            const curMm =
+                              typeof cur === "number"
+                                ? Math.floor(cur / 60)
+                                : 0;
+                            const curSs =
+                              typeof cur === "number" ? cur % 60 : 0;
+
+                            const nextMm =
+                              raw === ""
+                                ? undefined
+                                : clampInt(Number(raw), 0, 9999);
+                            const nextSec =
+                              nextMm == null && raw === "" && ss === ""
+                                ? undefined
+                                : (nextMm ?? curMm) * 60 + curSs;
+
+                            setDraft((d) => ({
+                              ...d,
+                              [milestone]: {
+                                ...d[milestone],
+                                thresholdSec: nextSec,
+                              },
+                            }));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            if (autosaveTimerRef.current)
+                              clearTimeout(autosaveTimerRef.current);
+                            autosaveTimerRef.current = null;
+                            void persistDraft("manual");
+                          }}
+                          className="timeField"
+                        />
+                        <span className="timeUnit">m</span>
+
+                        <span className="timeColon">:</span>
+
+                        <input
+                          type="number"
+                          aria-label={`${milestone}-seconds`}
+                          value={ss}
+                          placeholder="00"
+                          min={0}
+                          max={59}
+                          step={1}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const cur = draft[milestone]?.thresholdSec;
+                            const curMm =
+                              typeof cur === "number"
+                                ? Math.floor(cur / 60)
+                                : 0;
+
+                            const nextSs =
+                              raw === ""
+                                ? undefined
+                                : clampInt(Number(raw), 0, 59);
+                            const nextSec =
+                              nextSs == null && raw === "" && mm === ""
+                                ? undefined
+                                : curMm * 60 + (nextSs ?? 0);
+
+                            setDraft((d) => ({
+                              ...d,
+                              [milestone]: {
+                                ...d[milestone],
+                                thresholdSec: nextSec,
+                              },
+                            }));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            if (autosaveTimerRef.current)
+                              clearTimeout(autosaveTimerRef.current);
+                            autosaveTimerRef.current = null;
+                            void persistDraft("manual");
+                          }}
+                          className="timeField"
+                        />
+                        <span className="timeUnit">s</span>
+                      </div>
+
+                      <label className="milestoneToggle">
                         <input
                           type="checkbox"
                           checked={enabled}
@@ -1241,180 +1981,113 @@ function App() {
                             }));
                           }}
                         />
-                        on
                       </label>
-
-                      <div className="timeGroup">
-                        <div className="timeLabels">
-                          <div>min</div>
-                          <div />
-                          <div>sec</div>
-                        </div>
-
-                        <div className="timeInputs">
-                          <div className="timePrefix">&lt;</div>
-
-                          <input
-                            type="number"
-                            aria-label={`${milestone}-minutes`}
-                            value={mm}
-                            placeholder="0"
-                            min={0}
-                            step={1}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              // Minutes: allow blank; clamp to >= 0. (No hard max.)
-                              const cur = draft[milestone]?.thresholdSec;
-                              const curMm =
-                                typeof cur === "number"
-                                  ? Math.floor(cur / 60)
-                                  : 0;
-                              const curSs =
-                                typeof cur === "number" ? cur % 60 : 0;
-
-                              const nextMm =
-                                raw === ""
-                                  ? undefined
-                                  : clampInt(Number(raw), 0, 9999);
-                              const nextSec =
-                                nextMm == null && raw === "" && ss === ""
-                                  ? undefined
-                                  : (nextMm ?? curMm) * 60 + curSs;
-
-                              setDraft((d) => ({
-                                ...d,
-                                [milestone]: {
-                                  ...d[milestone],
-                                  thresholdSec: nextSec,
-                                },
-                              }));
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key !== "Enter") return;
-                              e.preventDefault();
-                              if (autosaveTimerRef.current)
-                                clearTimeout(autosaveTimerRef.current);
-                              autosaveTimerRef.current = null;
-                              void persistDraft("manual");
-                            }}
-                            className="timeField"
-                          />
-
-                          <div className="timeColon">:</div>
-
-                          <input
-                            type="number"
-                            aria-label={`${milestone}-seconds`}
-                            value={ss}
-                            placeholder="00"
-                            min={0}
-                            max={59}
-                            step={1}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              const cur = draft[milestone]?.thresholdSec;
-                              const curMm =
-                                typeof cur === "number"
-                                  ? Math.floor(cur / 60)
-                                  : 0;
-
-                              const nextSs =
-                                raw === ""
-                                  ? undefined
-                                  : clampInt(Number(raw), 0, 59);
-                              const nextSec =
-                                nextSs == null && raw === "" && mm === ""
-                                  ? undefined
-                                  : curMm * 60 + (nextSs ?? 0);
-
-                              setDraft((d) => ({
-                                ...d,
-                                [milestone]: {
-                                  ...d[milestone],
-                                  thresholdSec: nextSec,
-                                },
-                              }));
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key !== "Enter") return;
-                              e.preventDefault();
-                              if (autosaveTimerRef.current)
-                                clearTimeout(autosaveTimerRef.current);
-                              autosaveTimerRef.current = null;
-                              void persistDraft("manual");
-                            }}
-                            className="timeField"
-                          />
-                        </div>
-                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            <div
-              style={{
-                marginTop: 12,
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 10,
-              }}
-            >
+            <div className="milestonePanelFooter">
               <button
                 onClick={() => {
                   if (!selected) return;
                   setDraft(getMilestonesForStreamer(selected)); // revert
                 }}
-                style={smallBtn}
+                className="modalBtn"
               >
                 Cancel
               </button>
 
               <button
-                disabled={!cfg || !selected || saving}
+                disabled={!cfg || !selected || saving || milestoneSaved}
                 onClick={async () => {
                   if (autosaveTimerRef.current)
                     clearTimeout(autosaveTimerRef.current);
                   autosaveTimerRef.current = null;
                   await persistDraft("manual");
+                  if (milestoneSavedTimerRef.current) {
+                    window.clearTimeout(milestoneSavedTimerRef.current);
+                  }
+                  setMilestoneSaved(true);
+                  milestoneSavedTimerRef.current = window.setTimeout(() => {
+                    setMilestoneSaved(false);
+                    milestoneSavedTimerRef.current = null;
+                  }, 1200);
                 }}
-                style={{
-                  ...smallBtn,
-                  background: saving
-                    ? "rgba(255,255,255,0.06)"
-                    : "rgba(120,255,120,0.12)",
-                  border: "1px solid rgba(120,255,120,0.25)",
-                }}
+                className={`modalBtn modalBtn--save${
+                  milestoneSaved ? " saved" : ""
+                }`}
               >
-                {saving ? "Saving…" : "Save"}
+                {milestoneSaved ? (
+                  <>
+                    <svg
+                      className="savedCheck"
+                      viewBox="0 0 14 14"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M2.5 7.5L5.5 10.5L11.5 4"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                      />
+                    </svg>
+                    Saved
+                  </>
+                ) : saving ? (
+                  "Saving…"
+                ) : (
+                  "Save"
+                )}
               </button>
             </div>
+          </div>
           </div>
         ) : null}
 
         <div className="grid">
-          {streamers.map((name) => (
-            <div className="avatarTile" key={name}>
-              <button className="avatarBtn" onClick={() => setSelected(name)}>
-                {profileByName[name]?.avatarUrl ? (
+          {streamers.map((name, idx) => (
+            <div
+              className={`avatarTile${
+                dragState?.index === idx ? " dragOrigin" : ""
+              }`}
+              key={name}
+              ref={(node) => setTileRef(name, node)}
+              style={getTilePreviewStyle(name, idx)}
+            >
+              <button
+                className="avatarBtn"
+                type="button"
+                draggable={false}
+                onPointerDown={(e) => beginPointerDrag(e, idx, name)}
+                onClick={() => {
+                  if (suppressOpenRef.current || dragCandidate || dragState)
+                    return;
+                  setSelected(name);
+                }}
+              >
+                {getAvatarSrc(name) ? (
                   <img
                     className="avatarImg"
                     alt={`${name} avatar`}
-                    src={profileByName[name].avatarUrl!}
+                    src={getAvatarSrc(name)!}
                     loading="lazy"
+                    draggable={false}
                   />
                 ) : null}
-                {getBadgeData(name) ? (
-                  <span
-                    className={`milestoneBadge ${getBadgeData(name)!.className}`}
-                    aria-label={`${name}-milestone`}
-                    title={badgeTitleFor(name)}
-                  >
-                    {milestoneBadgeText(getBadgeData(name)!.milestone)}
-                  </span>
-                ) : null}
               </button>
+              {getBadgeData(name) ? (
+                <span
+                  className={`milestoneBadge ${getBadgeData(name)!.className}`}
+                  aria-label={`${name}-milestone`}
+                  title={badgeTitleFor(name)}
+                >
+                  {milestoneBadgeText(getBadgeData(name)!.milestone)}
+                </span>
+              ) : null}
               <a
                 className={`label labelLink labelRow ${
                   isStreamerLive(name) ? "labelLive" : ""
@@ -1426,7 +2099,11 @@ function App() {
               >
                 <span>{name}</span>
                 {isStreamerLive(name) ? (
-                  <span className="liveDot on" aria-hidden="true" />
+                  <span
+                    className="liveDot on"
+                    aria-label="Live on Twitch"
+                    title="Live on Twitch"
+                  />
                 ) : null}
               </a>
               <a
@@ -1454,75 +2131,86 @@ function App() {
           </div>
         </div>
 
-        <div className="modeStrip" aria-label="Alert modes">
-          <div className="modeCard">
-            <div className="modeHeader">
-              <span
-                className={`alertsDot ${browserAlertsEnabled ? "on" : "off"}`}
-                aria-hidden="true"
-              />
-              <span className="modeTitle">Browser alerts</span>
-            </div>
-            <div className="modeText">
-              {browserAlertsEnabled
-                ? "On while this tab stays open."
-                : "Try alerts in this tab before downloading."}
-            </div>
-            <button
-              className="alertsToggleBtn"
-              type="button"
-              onClick={() =>
-                browserAlertsEnabled
-                  ? disableBrowserAlerts()
-                  : enableBrowserAlerts()
-              }
+        {dragState ? (
+          <div
+            className="avatarDragOverlay"
+            style={{
+              transform: `translate(${dragState.x - dragState.offsetX}px, ${dragState.y - dragState.offsetY}px)`,
+              width: dragState.width,
+            }}
+          >
+            <div
+              className="avatarBtn"
+              style={{ width: dragState.width, height: dragState.height }}
             >
-              {browserAlertsEnabled
-                ? "Browser alerts enabled"
-                : "Enable browser alerts"}
-            </button>
-            {browserAlertsErr ? (
-              <div className="alertsError">{browserAlertsErr}</div>
-            ) : null}
-          </div>
-
-          <div className="modeCard modeCard--wide">
-            <div className="modeHeader">
-              <span className="modeDot desktop" aria-hidden="true" />
-              <span className="modeTitle">Desktop app</span>
+              {getAvatarSrc(dragState.name) ? (
+                <img
+                  className="avatarImg"
+                  alt={`${dragState.name} avatar`}
+                  src={getAvatarSrc(dragState.name)!}
+                  loading="lazy"
+                  draggable={false}
+                />
+              ) : null}
             </div>
-            <div className="modeText">
-              Background alerts after the app window is closed. Mac beta
-              builds are unsigned while the app is still being tested.
-            </div>
-            <div className="modeActions">
-              <a
-                className="installButton installButton--primary"
-                href={macAppDownloadUrl}
-                onClick={() =>
-                  void trackEvent("app_download_clicked", {
-                    platform: "mac",
-                    action: "download_dmg",
-                  })
-                }
+            {getBadgeData(dragState.name) ? (
+              <span
+                className={`milestoneBadge ${
+                  getBadgeData(dragState.name)!.className
+                }`}
+                aria-hidden="true"
               >
-                Download Mac Beta
-              </a>
+                {milestoneBadgeText(getBadgeData(dragState.name)!.milestone)}
+              </span>
+            ) : null}
+            <div className="label">{dragState.name}</div>
+            <div className="milestoneSubtitle">
+              {subtitleFor(dragState.name) ?? "Last update • —"}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="bottomSpacer" />
+
+        {!desktopApp ? (
+          <div className="downloadHub" aria-label="Desktop app downloads">
+            <div className="downloadHubHeader">
+              <div className="downloadHubTitle">Desktop app</div>
+              <div className="downloadHubText">
+                Get background alerts even when closed.
+              </div>
+            </div>
+            <div className="downloadHubActions">
               <button
-                className="installButton"
+                className="installButton installButton--primary"
                 type="button"
                 onClick={() => {
-                  void trackEvent("help_opened", {
-                    surface: "desktop-card",
-                  });
-                  setShowInstallDetails(true);
+                  openInstallGuide("mac");
                 }}
               >
-                How runAlert works
+                <svg width="14" height="14" viewBox="0 0 384 512" fill="currentColor" style={{marginRight: 6, flexShrink: 0}}>
+                  <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184 4 273.5c0 26.2 4.8 53.3 14.4 81.2 12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
+                </svg>
+                Download Mac Beta
+              </button>
+              <button
+                className="installButton installButton--primary"
+                type="button"
+                onClick={() => {
+                  openInstallGuide("windows");
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 448 512" fill="currentColor" style={{marginRight: 6, flexShrink: 0}}>
+                  <path d="M0 93.7l183.6-25.3v177.4H0V93.7zm0 324.6l183.6 25.3V268.4H0v149.9zm203.8 28L448 480V268.4H203.8v177.9zm0-380.6v180.1H448V32L203.8 65.7z"/>
+                </svg>
+                Download Windows Beta
               </button>
             </div>
+            {browserAlertsErr ? (
+              <div className="alertsError downloadHubError">{browserAlertsErr}</div>
+            ) : null}
           </div>
-        </div>
+        ) : null}
 
         <div className="creditRow">
           <span className="creditText">Powered by</span>{" "}
@@ -1535,6 +2223,7 @@ function App() {
             paceman.gg
           </a>
         </div>
+        <div className="pageVersion">v{APP_VERSION}</div>
 
         {showOnboarding ? (
           <div className="qhOverlay" onClick={dismissOnboarding}>
@@ -1554,9 +2243,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close onboarding"
-                  style={{ width: 46, height: 46 }}
                   onClick={dismissOnboarding}
                 >
                   <svg
@@ -1572,30 +2260,51 @@ function App() {
                 </button>
               </div>
               <div className="onboardingGrid">
-                <div className="onboardingStep">
-                  <div className="onboardingStepTitle">Add streamers</div>
-                  <div className="onboardingStepText">
-                    Track Paceman-supported runners from the grid.
-                  </div>
-                </div>
-                <div className="onboardingStep">
-                  <div className="onboardingStepTitle">Set thresholds</div>
-                  <div className="onboardingStepText">
-                    Choose the split times that make a run worth opening.
-                  </div>
-                </div>
-                <div className="onboardingStep">
-                  <div className="onboardingStepTitle">Try it in this tab</div>
-                  <div className="onboardingStepText">
-                    Browser alerts work while this page stays open.
-                  </div>
-                </div>
-                <div className="onboardingStep">
-                  <div className="onboardingStepTitle">Download the app</div>
-                  <div className="onboardingStepText">
-                    The desktop app is for durable background alerts.
-                  </div>
-                </div>
+                {desktopApp ? (
+                  <>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">Add streamers</div>
+                      <div className="onboardingStepText">
+                        Pick the runners you want to watch.
+                      </div>
+                    </div>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">Allow notifications</div>
+                      <div className="onboardingStepText">
+                        So runAlert can alert you when a run matters.
+                      </div>
+                    </div>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">
+                        Optional: Background Monitoring
+                      </div>
+                      <div className="onboardingStepText">
+                        Want seamless alerts without reopening runAlert? Turn this on.
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">Add streamers</div>
+                      <div className="onboardingStepText">
+                        Pick the runners you want to watch.
+                      </div>
+                    </div>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">Turn on browser alerts</div>
+                      <div className="onboardingStepText">
+                        Allow alerts in this browser.
+                      </div>
+                    </div>
+                    <div className="onboardingStep">
+                      <div className="onboardingStepTitle">Keep this tab open</div>
+                      <div className="onboardingStepText">
+                        Browser alerts work while this page stays open.
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="promptActions">
                 <button
@@ -1616,24 +2325,26 @@ function App() {
             onClick={() => setShowInstallDetails(false)}
           >
             <div
-              className="qhModal"
+              className="qhModal installGuideModal"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
-              aria-label="How runAlert works"
+              aria-label="Install help"
             >
               <div className="qhHeader">
                 <div>
-                  <div className="qhTitle">How runAlert works</div>
+                  <div className="qhTitle">
+                    {installGuidePlatform === "mac"
+                      ? "Install runAlert on Mac"
+                      : "Install runAlert on Windows"}
+                  </div>
                   <div className="qhHelp">
-                    Browser alerts are for trying runAlert. The desktop app is
-                    for background alerts after the window is closed.
+                    Follow these steps to get started.
                   </div>
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close help"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => setShowInstallDetails(false)}
                 >
                   <svg
@@ -1649,160 +2360,247 @@ function App() {
                 </button>
               </div>
 
-              <div className="helpGrid">
-                <div className="helpSection">
-                  <div className="installStepTitle">Browser demo</div>
-                  <div className="installSteps">
-                    Enable browser alerts to test runAlert while this tab is
-                    open. Closing the tab or browser stops browser alerts.
+              <div className="installGuideShell">
+                <div className="installGuideTabs" role="tablist" aria-label="Install platform">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={installGuidePlatform === "mac"}
+                    className={`installGuideTab ${
+                      installGuidePlatform === "mac" ? "active" : ""
+                    }`}
+                    onClick={() => {
+                      setInstallGuidePlatform("mac");
+                      setInstallGuideStep(0);
+                    }}
+                  >
+                    Mac
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={installGuidePlatform === "windows"}
+                    className={`installGuideTab ${
+                      installGuidePlatform === "windows" ? "active" : ""
+                    }`}
+                    onClick={() => {
+                      setInstallGuidePlatform("windows");
+                      setInstallGuideStep(0);
+                    }}
+                  >
+                    Windows
+                  </button>
+                </div>
+
+                <div className="installGuideStepMeta">
+                  {installGuide.map((_, i) => (
+                    <span
+                      key={i}
+                      className={`installGuideDot${i === installGuideStep ? " active" : ""}`}
+                    />
+                  ))}
+                </div>
+
+                <div className="installGuidePanel">
+                  {activeInstallStep.imageSrc ? (
+                    <div className="installGuideShotFrame">
+                      <img
+                        className="installGuideShot"
+                        src={activeInstallStep.imageSrc}
+                        alt={activeInstallStep.imageAlt}
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="installGuideCopy">
+                    <div className="installGuideTitle">
+                      {activeInstallStep.title}
+                    </div>
+                    <div className="installGuideBody">
+                      {activeInstallStep.body}
+                    </div>
+                    {activeInstallStep.details?.length ? (
+                      <ul className="installGuideList">
+                        {activeInstallStep.details.map((detail, idx) => (
+                          <li key={idx}>{detail}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {activeInstallStep.note ? (
+                      <div className="installGuideNote">
+                        {activeInstallStep.note}
+                      </div>
+                    ) : null}
+
+                    {installGuideStep === 0 ? (
+                      <div className="installGuideActions">
+                        <a
+                          className="installButton installButton--primary"
+                          href={guidePrimaryUrl}
+                          onClick={() =>
+                            void trackEvent("app_download_clicked", {
+                              platform: installGuidePlatform,
+                              action:
+                                installGuidePlatform === "mac"
+                                  ? "download_dmg"
+                                  : "download_exe",
+                            })
+                          }
+                        >
+                          {guidePrimaryLabel}
+                        </a>
+                        {installGuidePlatform === "mac" ? (
+                          <a
+                            className="installButton"
+                            href={macAppZipUrl}
+                            onClick={() =>
+                              void trackEvent("app_download_clicked", {
+                                platform: "mac",
+                                action: "download_zip",
+                              })
+                            }
+                          >
+                            Download ZIP
+                          </a>
+                        ) : null}
+                        <a
+                          className="installLink"
+                          href={GITHUB_BETA_RELEASE_URL}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View release + checksums
+                        </a>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
-                <div className="helpSection">
-                  <div className="installStepTitle">Mac beta download</div>
-                  <div className="installSteps">
-                    <a
-                      className="installLink"
-                      href={macAppDownloadUrl}
-                      onClick={() =>
-                        void trackEvent("app_download_clicked", {
-                          platform: "mac",
-                          action: "download_dmg_help",
-                        })
-                      }
-                    >
-                      Download DMG
-                    </a>{" "}
-                    •{" "}
-                    <a
-                      className="installLink"
-                      href={macAppZipUrl}
-                      onClick={() =>
-                        void trackEvent("app_download_clicked", {
-                          platform: "mac",
-                          action: "download_zip_help",
-                        })
-                      }
-                    >
-                      Download ZIP
-                    </a>
-                    . Unsigned builds may require right-click Open or Privacy &
-                    Security approval on macOS.
+
+                <div className="installGuideFooter">
+                  <button
+                    type="button"
+                    className="installButton"
+                    onClick={() =>
+                      setInstallGuideStep((step) => Math.max(0, step - 1))
+                    }
+                    disabled={installGuideStep === 0}
+                  >
+                    Back
+                  </button>
+                  <div className="installGuideFooterActions">
+                    {installGuideStep < installGuide.length - 1 ? (
+                      <button
+                        type="button"
+                        className="installButton installButton--primary"
+                        onClick={() =>
+                          setInstallGuideStep((step) =>
+                            Math.min(installGuide.length - 1, step + 1)
+                          )
+                        }
+                      >
+                        Next
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="installButton installButton--primary"
+                        onClick={() => setShowInstallDetails(false)}
+                      >
+                        Done
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="helpSection">
-                  <div className="installStepTitle">Desktop app</div>
-                  <div className="installSteps">
-                    The desktop app is the durable version for background
-                    alerts after the app window is closed. Full app packaging is
-                    in beta.
+
+                <details className="installGuideAdvanced">
+                  <summary>Need advanced install tools?</summary>
+                  <div className="installGuideAdvancedBody">
+                    <div className="installSteps">
+                      Fallback scripts clone the public runAlert repo and run
+                      the watcher directly. Keep them for advanced testing only.
+                    </div>
+                    <div className="installCommandRow">
+                      <button
+                        className="installCopy"
+                        type="button"
+                        onClick={() => {
+                          void trackEvent("app_download_clicked", {
+                            platform: "mac",
+                            action: "copy_command",
+                          });
+                          copyInstallCommand(macInstallCommand, "mac");
+                        }}
+                      >
+                        {installCopied === "mac"
+                          ? "Copied"
+                          : "Copy macOS command"}
+                      </button>
+                      <span className="installCommandHint">
+                        Bash installer (macOS)
+                      </span>
+                    </div>
+                    <div className="installCommand">{macInstallCommand}</div>
+                    <div className="installCommandRow">
+                      <button
+                        className="installCopy"
+                        type="button"
+                        onClick={() => {
+                          void trackEvent("app_download_clicked", {
+                            platform: "windows",
+                            action: "copy_command",
+                          });
+                          copyInstallCommand(windowsInstallCommand, "windows");
+                        }}
+                      >
+                        {installCopied === "windows"
+                          ? "Copied"
+                          : "Copy Windows command"}
+                      </button>
+                      <span className="installCommandHint">
+                        PowerShell installer (Windows)
+                      </span>
+                    </div>
+                    <div className="installCommand">{windowsInstallCommand}</div>
+                    <div className="installGuideAdvancedLinks">
+                      <a
+                        className="installLink"
+                        href={macViewInstallUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View macOS watcher script
+                      </a>
+                      <a
+                        className="installLink"
+                        href={windowsViewInstallUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View Windows watcher script
+                      </a>
+                    </div>
+                    <div className="installTestRow">
+                      <button
+                        className="installTest"
+                        type="button"
+                        onClick={sendTestNotification}
+                        disabled={testStatus === "sending"}
+                      >
+                        {testStatus === "sending"
+                          ? "Sending…"
+                          : "Send test notification"}
+                      </button>
+                      <span className="installTestHint">
+                        {testStatus === "success"
+                          ? "Sent! Check your desktop notifications."
+                          : testStatus === "error"
+                            ? "No agent detected yet."
+                            : "Use this after install to verify it works."}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div className="helpSection helpSection--wide">
-                  <div className="installStepTitle">Current beta setup scripts</div>
-                  <div className="installSteps">
-                    <a
-                      className="installLink"
-                      href={macViewInstallUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() =>
-                        void trackEvent("app_download_clicked", {
-                          platform: "mac",
-                          action: "view_script",
-                        })
-                      }
-                    >
-                      View macOS setup script
-                    </a>{" "}
-                    •{" "}
-                    <a
-                      className="installLink"
-                      href={windowsViewInstallUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() =>
-                        void trackEvent("app_download_clicked", {
-                          platform: "windows",
-                          action: "view_script",
-                        })
-                      }
-                    >
-                      View Windows setup script
-                    </a>{" "}
-                    — beta scripts that clone the public{" "}
-                    <a
-                      className="installLink"
-                      href="https://github.com/jz-42/Minecraft-Speedrun-Notifier-BETA"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      git repo
-                    </a>{" "}
-                    and run the watcher. Downloaded scripts can trigger
-                    operating system warnings until the packaged app is released.
-                  </div>
-                  <div className="installCommandRow">
-                    <button
-                      className="installCopy"
-                      type="button"
-                      onClick={() => {
-                        void trackEvent("app_download_clicked", {
-                          platform: "mac",
-                          action: "copy_command",
-                        });
-                        copyInstallCommand(macInstallCommand, "mac");
-                      }}
-                    >
-                      {installCopied === "mac"
-                        ? "Copied"
-                        : "Copy macOS command"}
-                    </button>
-                    <span className="installCommandHint">
-                      Bash installer (macOS)
-                    </span>
-                  </div>
-                  <div className="installCommand">{macInstallCommand}</div>
-                  <div className="installCommandRow">
-                    <button
-                      className="installCopy"
-                      type="button"
-                      onClick={() => {
-                        void trackEvent("app_download_clicked", {
-                          platform: "windows",
-                          action: "copy_command",
-                        });
-                        copyInstallCommand(windowsInstallCommand, "windows");
-                      }}
-                    >
-                      {installCopied === "windows"
-                        ? "Copied"
-                        : "Copy Windows command"}
-                    </button>
-                    <span className="installCommandHint">
-                      PowerShell installer (Windows)
-                    </span>
-                  </div>
-                  <div className="installCommand">{windowsInstallCommand}</div>
-                  <div className="installTestRow">
-                    <button
-                      className="installTest"
-                      type="button"
-                      onClick={sendTestNotification}
-                      disabled={testStatus === "sending"}
-                    >
-                      {testStatus === "sending"
-                        ? "Sending…"
-                        : "Send test notification"}
-                    </button>
-                    <span className="installTestHint">
-                      {testStatus === "success"
-                        ? "Sent! Check your desktop notifications."
-                        : testStatus === "error"
-                          ? "No agent detected yet."
-                          : "Use this after install to verify it works."}
-                    </span>
-                  </div>
-                </div>
+                </details>
               </div>
             </div>
           </div>
@@ -1810,43 +2608,19 @@ function App() {
 
         {showSettings ? (
           <div
+            className="settingsOverlay"
             onClick={() => setShowSettings(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.55)",
-              backdropFilter: "blur(6px)",
-              zIndex: 80,
-            }}
           >
             <div
+              className="settingsPanel"
               onClick={(e) => e.stopPropagation()}
-              style={{
-                position: "fixed",
-                right: 80,
-                top: 140,
-                width: 420,
-                padding: 26,
-                borderRadius: 18,
-                background: "var(--surfaceSolid)",
-                boxShadow: "0 16px 60px rgba(0,0,0,0.55)",
-                border: "1px solid var(--border)",
-                zIndex: 81,
-              }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div style={{ fontSize: 44, fontWeight: 700 }}>Settings</div>
+              <div className="settingsHeader">
+                <div className="settingsTitle">Settings</div>
                 <button
                   onClick={() => setShowSettings(false)}
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close settings"
-                  style={{ width: 46, height: 46 }}
                 >
                   <svg
                     className="iconSvg close"
@@ -1861,18 +2635,9 @@ function App() {
                 </button>
               </div>
 
-              <div style={{ marginTop: 18, display: "grid", gap: 14 }}>
+              <div className="settingsMenu">
                 <button
-                  style={settingsRowStyle}
-                  onClick={() => {
-                    setShowSettings(false);
-                    openQuietHoursEditor();
-                  }}
-                >
-                  Quiet Hours
-                </button>
-                <button
-                  style={settingsRowStyle}
+                  className="settingsMenuBtn"
                   onClick={() => {
                     setShowSettings(false);
                     setShowNotifications(true);
@@ -1881,13 +2646,22 @@ function App() {
                   Notifications
                 </button>
                 <button
-                  style={settingsRowStyle}
+                  className="settingsMenuBtn"
+                  onClick={() => {
+                    setShowSettings(false);
+                    openQuietHoursEditor();
+                  }}
+                >
+                  Quiet Hours
+                </button>
+                <button
+                  className="settingsMenuBtn"
                   onClick={() => {
                     setShowSettings(false);
                     setShowAgentSettings(true);
                   }}
                 >
-                  Agent (Mac)
+                  Background Monitoring
                 </button>
               </div>
             </div>
@@ -1896,7 +2670,7 @@ function App() {
 
         {showNotifications ? (
           <div
-            className="qhOverlay"
+            className="qhOverlay settingsSubOverlay"
             onClick={() => setShowNotifications(false)}
           >
             <div
@@ -1905,32 +2679,37 @@ function App() {
               role="dialog"
               aria-label="Notifications"
             >
-              <div className="qhHeader">
-                <div>
-                  <div className="qhTitle">Notifications</div>
-                  <div className="qhHelp">
-                    Control whether runAlert shows browser notifications and
-                    plays the alert sound.
-                  </div>
-                </div>
+              <div className="settingsSubHeader">
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="settingsBackBtn"
+                  aria-label="Back to settings"
+                  onClick={() => {
+                    setShowNotifications(false);
+                    setShowSettings(true);
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M10 3.5L5.5 8L10 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Settings
+                </button>
+                <button
+                  type="button"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close notifications"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => setShowNotifications(false)}
                 >
-                  <svg
-                    className="iconSvg close"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fill="currentColor"
-                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
-                    />
+                  <svg className="iconSvg close" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"/>
                   </svg>
                 </button>
+              </div>
+              <div className="settingsSubTitle">Notifications</div>
+              <div className="settingsSubHelp">
+                {desktopApp
+                  ? "Control whether runAlert sends alerts, plays sound, and works with macOS notification settings."
+                  : "Control whether runAlert shows browser alerts and plays the alert sound while this tab stays open."}
               </div>
 
               <div className="notifBody">
@@ -1939,23 +2718,9 @@ function App() {
                   <input
                     type="checkbox"
                     checked={notificationsEnabled}
-                    onChange={(e) => {
-                      const next = e.target.checked;
-                      if (!cfg) return;
-                      const updated = structuredClone(cfg);
-                      updated.notifications = {
-                        ...(updated.notifications || {}),
-                        enabled: next,
-                        sound:
-                          updated.notifications?.sound ??
-                          notificationSoundEnabled,
-                      };
-                      setCfg(updated);
-                      setErr(null);
-                      void putConfig(updated).catch((e) =>
-                        setErr(e?.message ?? String(e))
-                      );
-                    }}
+                    onChange={(e) =>
+                      toggleNotificationsEnabled(e.target.checked)
+                    }
                   />
                 </label>
                 <label className="notifRow">
@@ -1964,67 +2729,84 @@ function App() {
                     type="checkbox"
                     checked={notificationSoundEnabled}
                     disabled={!notificationsEnabled}
-                    onChange={(e) => {
-                      const next = e.target.checked;
-                      if (!cfg) return;
-                      const updated = structuredClone(cfg);
-                      updated.notifications = {
-                        ...(updated.notifications || {}),
-                        enabled:
-                          updated.notifications?.enabled ??
-                          notificationsEnabled,
-                        sound: next,
-                      };
-                      setCfg(updated);
-                      setErr(null);
-                      void putConfig(updated).catch((e) =>
-                        setErr(e?.message ?? String(e))
-                      );
-                    }}
+                    onChange={(e) => toggleNotificationSound(e.target.checked)}
                   />
                 </label>
+                {desktopApp ? (
+                  <div className="notifSection">
+                    <div className="notifSectionTitle">macOS controls the rest</div>
+                    <div className="notifNote">
+                      Banner style, lock screen, notification center, badges,
+                      sound, previews, and grouping all live in macOS Settings
+                      → Notifications → runAlert.
+                    </div>
+                    <img
+                      className="notifPreviewShot"
+                      src="/install-guide/step-5-notification-settings.png"
+                      alt="macOS notification settings for runAlert"
+                      loading="lazy"
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
         ) : null}
 
         {showAgentSettings ? (
-          <div className="qhOverlay" onClick={() => setShowAgentSettings(false)}>
+          <div className="qhOverlay settingsSubOverlay" onClick={() => setShowAgentSettings(false)}>
             <div
               className="qhModal"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
-              aria-label="Agent"
+              aria-label="Background monitoring"
             >
-              <div className="qhHeader">
-                <div>
-                  <div className="qhTitle">Agent (Mac)</div>
-                  <div className="qhHelp">
-                    Control background alerts and experimental features for the
-                    local agent.
-                  </div>
-                </div>
+              <div className="settingsSubHeader">
                 <button
                   type="button"
-                  className="iconBtn"
-                  aria-label="Close agent settings"
-                  style={{ width: 46, height: 46 }}
+                  className="settingsBackBtn"
+                  aria-label="Back to settings"
+                  onClick={() => {
+                    setShowAgentSettings(false);
+                    setShowSettings(true);
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M10 3.5L5.5 8L10 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Settings
+                </button>
+                <button
+                  type="button"
+                  className="iconBtn iconBtn--close"
+                  aria-label="Close background monitoring settings"
                   onClick={() => setShowAgentSettings(false)}
                 >
-                  <svg
-                    className="iconSvg close"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fill="currentColor"
-                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
-                    />
+                  <svg className="iconSvg close" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"/>
                   </svg>
                 </button>
               </div>
+              <div className="settingsSubTitle">Background Monitoring</div>
+              <div className="settingsSubHelp">
+                Keep runAlert in the background for seamless alerts, even
+                after sleep or restart.
+              </div>
 
               <div className="notifBody">
+                <label className="notifRow">
+                  <span>Enable background monitoring</span>
+                  <input
+                    type="checkbox"
+                    checked={backgroundMonitoringEnabled}
+                    onChange={(e) => {
+                      updateBackgroundMonitoring(e.target.checked);
+                    }}
+                  />
+                </label>
+                <div className="notifNote">
+                  If you quit runAlert, this stops until you open it again.
+                </div>
                 <label className="notifRow">
                   <span>Auto‑update agent on launch</span>
                   <input
@@ -2037,43 +2819,19 @@ function App() {
                       updated.agent = {
                         ...(updated.agent || {}),
                         autoUpdate: next,
-                        forsenOcr:
-                          updated.agent?.forsenOcr ?? forsenOcrEnabled,
+                        backgroundMonitoring: backgroundMonitoringEnabled,
                       };
-                      setCfg(updated);
+                      applyConfig(updated);
                       setErr(null);
-                      void putConfig(updated).catch((e) =>
-                        setErr(e?.message ?? String(e))
-                      );
-                    }}
-                  />
-                </label>
-                <label className="notifRow">
-                  <span>Forsen OCR (experimental)</span>
-                  <input
-                    type="checkbox"
-                    checked={forsenOcrEnabled}
-                    onChange={(e) => {
-                      const next = e.target.checked;
-                      if (!cfg) return;
-                      const updated = structuredClone(cfg);
-                      updated.agent = {
-                        ...(updated.agent || {}),
-                        autoUpdate:
-                          updated.agent?.autoUpdate ?? agentAutoUpdateEnabled,
-                        forsenOcr: next,
-                      };
-                      setCfg(updated);
-                      setErr(null);
-                      void putConfig(updated).catch((e) =>
+                      void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
                         setErr(e?.message ?? String(e))
                       );
                     }}
                   />
                 </label>
                 <div className="notifNote">
-                  Forsen OCR requires the Mac agent and is opt‑in. It may use
-                  extra CPU/bandwidth.
+                  <span className="inlineBadge">Quit</span>
+                  <span>Fully stops seamless background alerts.</span>
                 </div>
               </div>
             </div>
@@ -2082,7 +2840,7 @@ function App() {
 
         {showQuietHours && cfg ? (
           <div
-            className="qhOverlay"
+            className="qhOverlay settingsSubOverlay"
             onClick={() => {
               if (quietSaving) return;
               setShowQuietHours(false);
@@ -2095,227 +2853,217 @@ function App() {
               role="dialog"
               aria-label="Quiet hours"
             >
-              <div className="qhHeader">
-                <div>
-                  <div className="qhTitle">Quiet Hours</div>
-                  <div className="qhHelp">
-                    During quiet hours, runAlert will keep monitoring runs, but
-                    it will not send notifications.
-                  </div>
-                </div>
+              <div className="settingsSubHeader">
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="settingsBackBtn"
+                  aria-label="Back to settings"
+                  onClick={() => {
+                    if (quietSaving) return;
+                    setShowQuietHours(false);
+                    setQuietErr(null);
+                    setShowSettings(true);
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M10 3.5L5.5 8L10 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Settings
+                </button>
+                <button
+                  type="button"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close quiet hours"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => {
                     if (quietSaving) return;
                     setShowQuietHours(false);
                     setQuietErr(null);
                   }}
                 >
-                  <svg
-                    className="iconSvg close"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fill="currentColor"
-                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
-                    />
+                  <svg className="iconSvg close" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"/>
                   </svg>
                 </button>
+              </div>
+              <div className="settingsSubTitle">Quiet Hours</div>
+              <div className="settingsSubHelp">
+                Mute notifications during specific times. Monitoring continues.
               </div>
 
               {quietErr ? <div className="qhError">{quietErr}</div> : null}
 
               <div className="qhBody">
-                {quietDraft.length ? (
-                  <div className="qhList">
-                    {quietDraft.map((span, idx) => {
-                      const canRemove = !quietSaving;
-                      return (
-                        <div className="qhRow" key={idx}>
-                          <div className="qhRowLabel">Span {idx + 1}</div>
-
-                          <div className="qhTimes">
-                            <div className="qhTimeBlock">
-                              <div className="qhTimeCaption">Start</div>
-                              <div className="qhTimeInputs">
-                                <input
-                                  className="qhTimeField"
-                                  type="number"
-                                  min={1}
-                                  max={12}
-                                  placeholder="9"
-                                  value={span.start.hh}
-                                  aria-label={`quiet-${idx}-start-hour`}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        start: { ...next[idx].start, hh: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <div className="qhColon">:</div>
-                                <input
-                                  className="qhTimeField"
-                                  type="number"
-                                  min={0}
-                                  max={59}
-                                  placeholder="00"
-                                  value={span.start.mm}
-                                  aria-label={`quiet-${idx}-start-minute`}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        start: { ...next[idx].start, mm: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <select
-                                  className="qhAmPm"
-                                  value={span.start.ampm}
-                                  aria-label={`quiet-${idx}-start-ampm`}
-                                  onChange={(e) => {
-                                    const v = e.target.value as AmPm;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        start: { ...next[idx].start, ampm: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  <option value="AM">AM</option>
-                                  <option value="PM">PM</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            <div className="qhTimeBlock">
-                              <div className="qhTimeCaption">End</div>
-                              <div className="qhTimeInputs">
-                                <input
-                                  className="qhTimeField"
-                                  type="number"
-                                  min={1}
-                                  max={12}
-                                  placeholder="9"
-                                  value={span.end.hh}
-                                  aria-label={`quiet-${idx}-end-hour`}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        end: { ...next[idx].end, hh: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <div className="qhColon">:</div>
-                                <input
-                                  className="qhTimeField"
-                                  type="number"
-                                  min={0}
-                                  max={59}
-                                  placeholder="00"
-                                  value={span.end.mm}
-                                  aria-label={`quiet-${idx}-end-minute`}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        end: { ...next[idx].end, mm: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                />
-                                <select
-                                  className="qhAmPm"
-                                  value={span.end.ampm}
-                                  aria-label={`quiet-${idx}-end-ampm`}
-                                  onChange={(e) => {
-                                    const v = e.target.value as AmPm;
-                                    setQuietDraft((d) => {
-                                      const next = d.slice();
-                                      next[idx] = {
-                                        ...next[idx],
-                                        end: { ...next[idx].end, ampm: v },
-                                      };
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  <option value="AM">AM</option>
-                                  <option value="PM">PM</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="qhRowActions">
-                            <button
-                              type="button"
-                              className="qhRemove"
-                              disabled={!canRemove}
-                              onClick={() => {
-                                setQuietDraft((d) =>
-                                  d.filter((_, i) => i !== idx)
-                                );
-                              }}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                {quietDraft.map((span, idx) => (
+                  <div className="qhPeriod" key={idx}>
+                    <div className="qhPeriodHeader">
+                      <span className="qhPeriodLabel">
+                        {quietDraft.length > 1 ? `Period ${idx + 1}` : "Mute from"}
+                      </span>
+                      {confirmRemoveQH === idx ? (
+                        <span className="qhConfirmRemove">
+                          <span className="qhConfirmText">Remove?</span>
+                          <button
+                            type="button"
+                            className="qhConfirmYes"
+                            onClick={() => {
+                              setQuietDraft((d) => d.filter((_, i) => i !== idx));
+                              setConfirmRemoveQH(null);
+                            }}
+                          >
+                            Yes
+                          </button>
+                          <button
+                            type="button"
+                            className="qhConfirmNo"
+                            onClick={() => setConfirmRemoveQH(null)}
+                          >
+                            No
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="qhRemoveIcon"
+                          disabled={quietSaving}
+                          aria-label="Remove period"
+                          onClick={() => setConfirmRemoveQH(idx)}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                            <path d="M4.5 2H11.5M2 4H14M12.667 4L12.111 12.067C12.048 12.956 11.296 13.667 10.405 13.667H5.595C4.704 13.667 3.952 12.956 3.889 12.067L3.333 4M6.333 7.333V10.667M9.667 7.333V10.667" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    <div className="qhInlineRow">
+                      <div className="qhInlineTime">
+                        <input
+                          className="qhTimeCompact"
+                          type="number"
+                          min={1}
+                          max={12}
+                          placeholder="10"
+                          value={span.start.hh}
+                          aria-label={`quiet-${idx}-start-hour`}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], start: { ...next[idx].start, hh: v } };
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="qhTimeSep">:</span>
+                        <input
+                          className="qhTimeCompact"
+                          type="number"
+                          min={0}
+                          max={59}
+                          placeholder="00"
+                          value={span.start.mm}
+                          aria-label={`quiet-${idx}-start-minute`}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], start: { ...next[idx].start, mm: v } };
+                              return next;
+                            });
+                          }}
+                        />
+                        <select
+                          className="qhAmPmCompact"
+                          value={span.start.ampm}
+                          aria-label={`quiet-${idx}-start-ampm`}
+                          onChange={(e) => {
+                            const v = e.target.value as AmPm;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], start: { ...next[idx].start, ampm: v } };
+                              return next;
+                            });
+                          }}
+                        >
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                      <span className="qhArrow">→</span>
+                      <div className="qhInlineTime">
+                        <input
+                          className="qhTimeCompact"
+                          type="number"
+                          min={1}
+                          max={12}
+                          placeholder="7"
+                          value={span.end.hh}
+                          aria-label={`quiet-${idx}-end-hour`}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], end: { ...next[idx].end, hh: v } };
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="qhTimeSep">:</span>
+                        <input
+                          className="qhTimeCompact"
+                          type="number"
+                          min={0}
+                          max={59}
+                          placeholder="00"
+                          value={span.end.mm}
+                          aria-label={`quiet-${idx}-end-minute`}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], end: { ...next[idx].end, mm: v } };
+                              return next;
+                            });
+                          }}
+                        />
+                        <select
+                          className="qhAmPmCompact"
+                          value={span.end.ampm}
+                          aria-label={`quiet-${idx}-end-ampm`}
+                          onChange={(e) => {
+                            const v = e.target.value as AmPm;
+                            setQuietDraft((d) => {
+                              const next = d.slice();
+                              next[idx] = { ...next[idx], end: { ...next[idx].end, ampm: v } };
+                              return next;
+                            });
+                          }}
+                        >
+                          <option value="AM">AM</option>
+                          <option value="PM">PM</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <div className="qhEmpty">
-                    No quiet hours set. Add a span to mute notifications during
-                    specific times.
-                  </div>
-                )}
+                ))}
 
                 <div className="qhFooter">
-                  <button
-                    type="button"
-                    className="qhAdd"
-                    disabled={
-                      quietSaving || quietDraft.length >= MAX_QUIET_SPANS
-                    }
-                    onClick={() => {
-                      if (quietDraft.length >= MAX_QUIET_SPANS) return;
-                      setQuietDraft((d) => [...d, defaultQuietSpan()]);
-                    }}
-                  >
-                    Add span ({quietDraft.length}/{MAX_QUIET_SPANS})
-                  </button>
+                  {quietDraft.length < MAX_QUIET_SPANS ? (
+                    <button
+                      type="button"
+                      className="qhAddPeriod"
+                      disabled={quietSaving}
+                      onClick={() => {
+                        setQuietDraft((d) => [...d, defaultQuietSpan()]);
+                      }}
+                    >
+                      + Add quiet period
+                    </button>
+                  ) : <div />}
 
                   <div className="qhFooterRight">
                     <button
                       type="button"
-                      style={smallBtn}
+                      className="modalBtn"
                       disabled={quietSaving}
                       onClick={() => {
                         if (quietSaving) return;
@@ -2328,8 +3076,8 @@ function App() {
 
                     <button
                       type="button"
-                      disabled={quietSaving}
-                      className="qhSave"
+                      disabled={quietSaving || quietSaved}
+                      className={`qhSave${quietSaved ? " saved" : ""}`}
                       onClick={async () => {
                         if (!cfg) return;
                         const v = validateQuietDraft(quietDraft);
@@ -2342,17 +3090,45 @@ function App() {
                         try {
                           const next = structuredClone(cfg);
                           next.quietHours = v.ranges;
-                          const saved = await putConfig(next);
-                          setCfg(saved);
-                          setShowQuietHours(false);
+                          const saved = await putConfig(
+                            stripLegacyForsenConfig(next)
+                          );
+                          applyConfig(saved);
+                          setQuietSaving(false);
+                          setQuietSaved(true);
+                          window.setTimeout(() => {
+                            setShowQuietHours(false);
+                            setQuietSaved(false);
+                          }, 900);
                         } catch (e: any) {
                           setQuietErr(e?.message ?? String(e));
-                        } finally {
                           setQuietSaving(false);
                         }
                       }}
                     >
-                      {quietSaving ? "Saving…" : "Save"}
+                      {quietSaved ? (
+                        <>
+                          <svg
+                            className="savedCheck"
+                            viewBox="0 0 14 14"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M2.5 7.5L5.5 10.5L11.5 4"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              fill="none"
+                            />
+                          </svg>
+                          Saved
+                        </>
+                      ) : quietSaving ? (
+                        "Saving…"
+                      ) : (
+                        "Save"
+                      )}
                     </button>
                   </div>
                 </div>
@@ -2379,14 +3155,22 @@ function App() {
                 <div>
                   <div className="qhTitle">Add Streamer</div>
                   <div className="qhHelp">
-                    Enter a Paceman player name (usually their Twitch handle).
+                    Enter a{" "}
+                    <a
+                      className="installGuideInlineLink"
+                      href="https://paceman.gg/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Paceman
+                    </a>{" "}
+                    player name (not always their Twitch handle).
                   </div>
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close add streamer"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => {
                     setShowAddStreamer(false);
                     setAddStreamerErr(null);
@@ -2410,12 +3194,11 @@ function App() {
               ) : null}
 
               <div className="promptBody">
-                <div className="promptLabel">Streamer name</div>
                 <input
                   className="promptInput"
                   value={addStreamerName}
                   onChange={(e) => setAddStreamerName(e.target.value)}
-                  placeholder="e.g. xQcOW"
+                  placeholder="e.g. xQc"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key !== "Enter") return;
@@ -2428,7 +3211,7 @@ function App() {
               <div className="promptActions">
                 <button
                   type="button"
-                  style={smallBtn}
+                  className="modalBtn"
                   onClick={() => {
                     setShowAddStreamer(false);
                     setAddStreamerErr(null);
@@ -2469,9 +3252,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close remove streamer"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => setPendingRemove(null)}
                 >
                   <svg
@@ -2490,14 +3272,14 @@ function App() {
               <div className="promptActions">
                 <button
                   type="button"
-                  style={smallBtn}
+                  className="modalBtn"
                   onClick={() => setPendingRemove(null)}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  className="qhSave"
+                  className="modalBtn modalBtn--danger modalBtn--solid"
                   onClick={() => {
                     const name = pendingRemove;
                     setPendingRemove(null);
@@ -2528,9 +3310,8 @@ function App() {
                 </div>
                 <button
                   type="button"
-                  className="iconBtn"
+                  className="iconBtn iconBtn--close"
                   aria-label="Close copy command"
-                  style={{ width: 46, height: 46 }}
                   onClick={() => setShowCopyFallback(false)}
                 >
                   <svg
@@ -2553,7 +3334,7 @@ function App() {
               <div className="promptActions">
                 <button
                   type="button"
-                  style={smallBtn}
+                  className="modalBtn"
                   onClick={() => setShowCopyFallback(false)}
                 >
                   Close
@@ -2566,27 +3347,5 @@ function App() {
     </div>
   );
 }
-
-const settingsRowStyle: CSSProperties = {
-  height: 62,
-  borderRadius: 12,
-  border: "1px solid var(--borderStrong)",
-  background: "rgba(20, 18, 32, 0.52)",
-  color: "#ddd",
-  fontSize: 24,
-  textAlign: "left",
-  padding: "0 18px",
-  cursor: "pointer",
-};
-
-const smallBtn: CSSProperties = {
-  height: 40,
-  padding: "0 14px",
-  borderRadius: 10,
-  border: "1px solid var(--border)",
-  background: "rgba(20, 18, 32, 0.48)",
-  color: "#eaeaea",
-  cursor: "pointer",
-};
 
 export default App;

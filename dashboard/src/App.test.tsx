@@ -51,6 +51,7 @@ describe("App", () => {
   beforeEach(() => {
     // Reset mocks between tests so calls don’t bleed across test cases.
     vi.restoreAllMocks();
+    delete (window as any).runAlertDesktop;
   });
 
   afterEach(() => {
@@ -104,7 +105,7 @@ describe("App", () => {
       screen.queryByRole("link", { name: "Download Windows Installer" })
     ).toBeNull();
     expect(
-      screen.getByRole("button", { name: "How runAlert works" })
+      screen.getByRole("button", { name: "Install Help" })
     ).toBeTruthy();
   });
 
@@ -125,18 +126,458 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("xQcOW");
 
-    expect(screen.getByText("Browser alerts")).toBeTruthy();
+    expect(screen.getByText("Browser Alerts")).toBeTruthy();
     expect(screen.getByText("Desktop app")).toBeTruthy();
     expect(
-      screen.getByRole("link", { name: "Download Mac Beta" }).getAttribute("href")
-    ).toBe("/download/macos/dmg");
+      screen.getByRole("button", { name: "Download Mac Beta" })
+    ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "How runAlert works" })
+      screen.getByRole("button", { name: "Download Windows Beta" })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Install Help" })
     ).toBeTruthy();
     expect(
       screen.queryByText(/plain scripts that clone the public/i)
     ).toBeNull();
     expect(screen.queryByText(/no bitcoin miner/i)).toBeNull();
+  });
+
+  it("hides browser and install landing panels inside the desktop app surface", async () => {
+    (window as any).runAlertDesktop = { platform: "darwin" };
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    expect(screen.queryByText("Desktop app")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Download Mac Beta" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Download Windows Beta" })).toBeNull();
+    expect(screen.getByTestId("header-notifications")).toBeTruthy();
+    expect(screen.getByTestId("header-background")).toBeTruthy();
+  });
+
+  it("opens the install walkthrough before exposing the real Mac download action", async () => {
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(screen.getByRole("button", { name: "Download Mac Beta" }));
+
+    expect(await screen.findByRole("dialog", { name: "Install help" })).toBeTruthy();
+    expect(screen.getByText("Install runAlert on Mac")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Download DMG" }).getAttribute("href")).toBe(
+      "/download/macos/dmg"
+    );
+  });
+
+  it("lets the install walkthrough switch to the Windows path", async () => {
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(screen.getByRole("button", { name: "Download Windows Beta" }));
+
+    expect(await screen.findByRole("dialog", { name: "Install help" })).toBeTruthy();
+    expect(screen.getByText("Install runAlert on Windows")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Download EXE" }).getAttribute("href")).toBe(
+      "/download/windows/exe"
+    );
+  });
+
+  it("persists desktop notification utility toggles through PUT /config", async () => {
+    (window as any).runAlertDesktop = { platform: "darwin" };
+
+    const initialConfig = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+      notifications: {
+        enabled: true,
+        sound: true,
+      },
+    };
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      const u = String(url);
+      const method = options?.method || "GET";
+
+      if (u.includes("/config") && method === "GET") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => initialConfig,
+        };
+      }
+
+      if (u.includes("/config") && method === "PUT") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => JSON.parse(String(options?.body || "{}")),
+        };
+      }
+
+      if (u.includes("/profiles")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, profiles: {} }),
+        };
+      }
+
+      if (u.includes("/status")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, statuses: {} }),
+        };
+      }
+
+      if (u.includes("/twitch/status")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, statuses: {} }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch: ${u}`);
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(screen.getByLabelText("Turn notification sound off"));
+
+    await waitFor(() => {
+      const putCall = (globalThis.fetch as any).mock.calls.find(
+        ([url, options]: [string, RequestInit]) =>
+          String(url).includes("/config") && options?.method === "PUT"
+      );
+      expect(putCall).toBeTruthy();
+      expect(JSON.parse(String(putCall[1].body))).toMatchObject({
+        notifications: {
+          enabled: true,
+          sound: false,
+        },
+      });
+    });
+
+    fireEvent.click(screen.getByLabelText("Disable notifications"));
+
+    await waitFor(() => {
+      const putCalls = (globalThis.fetch as any).mock.calls.filter(
+        ([url, options]: [string, RequestInit]) =>
+          String(url).includes("/config") && options?.method === "PUT"
+      );
+      const lastPut = putCalls[putCalls.length - 1];
+      expect(JSON.parse(String(lastPut[1].body))).toMatchObject({
+        notifications: {
+          enabled: false,
+          sound: false,
+        },
+      });
+    });
+  });
+
+  it("shows macOS notification guidance inside desktop notification settings", async () => {
+    (window as any).runAlertDesktop = { platform: "darwin" };
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+          notifications: {
+            enabled: true,
+            sound: true,
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(screen.getByLabelText("Open notifications settings"));
+
+    expect(await screen.findByRole("dialog", { name: "Notifications" })).toBeTruthy();
+    expect(screen.getByText(/macOS controls the rest/i)).toBeTruthy();
+    expect(
+      screen.getByAltText("macOS notification settings for runAlert")
+    ).toBeTruthy();
+  });
+
+  it("shows simplified desktop onboarding and background monitoring language", async () => {
+    (window as any).runAlertDesktop = { platform: "darwin" };
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: {},
+          profiles: {},
+          notifications: {
+            enabled: true,
+            sound: true,
+          },
+          agent: {
+            backgroundMonitoring: false,
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    expect(await screen.findByRole("dialog", { name: "Welcome to runAlert" })).toBeTruthy();
+    expect(screen.getByText("Add streamers")).toBeTruthy();
+    expect(screen.getByText("Allow notifications")).toBeTruthy();
+    expect(screen.getByText("Optional: Background Monitoring")).toBeTruthy();
+    expect(
+      screen.getByText(/Want seamless alerts without reopening runAlert\? Turn this on\./i)
+    ).toBeTruthy();
+    expect(screen.queryByText("Set thresholds")).toBeNull();
+    expect(screen.queryByText("Download the app")).toBeNull();
+  });
+
+  it("lets desktop users toggle background monitoring and open a simple explainer", async () => {
+    (window as any).runAlertDesktop = { platform: "darwin" };
+
+    const initialConfig = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: {},
+      profiles: {},
+      agent: {
+        autoUpdate: false,
+        backgroundMonitoring: false,
+      },
+    };
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      const u = String(url);
+      const method = options?.method || "GET";
+
+      if (u.includes("/config") && method === "GET") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => initialConfig,
+        };
+      }
+
+      if (u.includes("/config") && method === "PUT") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => JSON.parse(String(options?.body || "{}")),
+        };
+      }
+
+      if (u.includes("/profiles")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, profiles: {} }),
+        };
+      }
+
+      if (u.includes("/status")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, statuses: {} }),
+        };
+      }
+
+      if (u.includes("/twitch/status")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, statuses: {} }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch: ${u}`);
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    expect(screen.getByText("Background Monitoring")).toBeTruthy();
+    expect(screen.getByText("Off")).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("Enable background monitoring"));
+
+    await waitFor(() => {
+      const putCall = (globalThis.fetch as any).mock.calls.find(
+        ([url, options]: [string, RequestInit]) =>
+          String(url).includes("/config") && options?.method === "PUT"
+      );
+      expect(putCall).toBeTruthy();
+      expect(JSON.parse(String(putCall[1].body))).toMatchObject({
+        agent: {
+          autoUpdate: false,
+          backgroundMonitoring: true,
+        },
+      });
+    });
+
+    fireEvent.click(screen.getByLabelText("Open background monitoring settings"));
+
+    expect(
+      await screen.findByRole("dialog", { name: "Background monitoring" })
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Keep runAlert in the background for seamless alerts, even after sleep or restart\./i
+      )
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/If you quit runAlert, this stops until you open it again\./i)
+    ).toBeTruthy();
+  });
+
+  it("removes the legacy forsen OCR control from background settings and strips it on save", async () => {
+    (window as any).runAlertDesktop = { platform: "darwin" };
+
+    const initialConfig = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: {},
+      profiles: {},
+      agent: {
+        autoUpdate: false,
+        forsenOcr: true,
+      },
+    };
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      const u = String(url);
+      const method = options?.method || "GET";
+
+      if (u.includes("/config") && method === "GET") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => initialConfig,
+        };
+      }
+
+      if (u.includes("/config") && method === "PUT") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => JSON.parse(String(options?.body || "{}")),
+        };
+      }
+
+      if (u.includes("/profiles")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, profiles: {} }),
+        };
+      }
+
+      if (u.includes("/status")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, statuses: {} }),
+        };
+      }
+
+      if (u.includes("/twitch/status")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, statuses: {} }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch: ${u}`);
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(
+      screen.getByLabelText("Open background monitoring settings")
+    );
+
+    expect(
+      await screen.findByRole("dialog", { name: "Background monitoring" })
+    ).toBeTruthy();
+    expect(screen.queryByText(/Forsen OCR/i)).toBeNull();
+
+    fireEvent.click(screen.getByLabelText(/Auto.?update agent on launch/i));
+
+    await waitFor(() => {
+      const putCall = (globalThis.fetch as any).mock.calls.find(
+        ([url, options]: [string, RequestInit]) =>
+          String(url).includes("/config") && options?.method === "PUT"
+      );
+      expect(putCall).toBeTruthy();
+      expect(JSON.parse(String(putCall[1].body))).toMatchObject({
+        agent: {
+          autoUpdate: true,
+        },
+      });
+      expect(JSON.parse(String(putCall[1].body)).agent).not.toHaveProperty(
+        "forsenOcr"
+      );
+    });
   });
 
   it("does not render the live dot when local run status is active but hosted twitch status is offline", async () => {
@@ -322,7 +763,8 @@ describe("App", () => {
       name: "Welcome to runAlert",
     });
 
-    expect(within(dialog).getByText("Try it in this tab")).toBeTruthy();
+    expect(within(dialog).getByText("Turn on browser alerts")).toBeTruthy();
+    expect(within(dialog).getByText("Keep this tab open")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Got it" }));
 
     await waitFor(() => {
@@ -1470,7 +1912,7 @@ describe("App", () => {
     vi.spyOn(window, "prompt").mockReturnValue(null);
 
     const cfg: any = {
-      streamers: ["xQcOW", "forsen"],
+      streamers: ["xQcOW", "forsen", "ohnePixel", "STABLERONALDO"],
       clock: "IGT",
       quietHours: "00:30-07:15",
       defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
@@ -1494,7 +1936,9 @@ describe("App", () => {
             ok: true,
             profiles: {
               xQcOW: { avatarUrl: "https://example.com/xqc.png" },
-              forsen: { avatarUrl: null },
+              forsen: { avatarUrl: "https://example.com/forsen-real.png" },
+              ohnePixel: { avatarUrl: "https://example.com/ohne-real.png" },
+              STABLERONALDO: { avatarUrl: "https://example.com/stable-real.png" },
             },
           }),
         };
@@ -1523,6 +1967,18 @@ describe("App", () => {
                 runIsActive: false,
                 lastMilestone: "nether",
               },
+              ohnePixel: {
+                runId: 3,
+                isLive: false,
+                isActive: false,
+                runIsActive: false,
+              },
+              STABLERONALDO: {
+                runId: 4,
+                isLive: false,
+                isActive: false,
+                runIsActive: false,
+              },
             },
           }),
         };
@@ -1536,10 +1992,27 @@ describe("App", () => {
 
     await screen.findByText("xQcOW");
     await screen.findByText("forsen");
+    await screen.findByText("ohnePixel");
+    await screen.findByText("STABLERONALDO");
 
     const xAvatar = await screen.findByAltText("xQcOW avatar");
     expect((xAvatar as HTMLImageElement).src).toContain(
       "https://example.com/xqc.png"
+    );
+
+    const forsenAvatar = await screen.findByAltText("forsen avatar");
+    expect((forsenAvatar as HTMLImageElement).src).toContain(
+      "/special-streamers/forsen.png"
+    );
+
+    const ohneAvatar = await screen.findByAltText("ohnePixel avatar");
+    expect((ohneAvatar as HTMLImageElement).src).toContain(
+      "/special-streamers/ohnepixel.png"
+    );
+
+    const stableAvatar = await screen.findByAltText("STABLERONALDO avatar");
+    expect((stableAvatar as HTMLImageElement).src).toContain(
+      "/special-streamers/stableronaldo.png"
     );
 
     const xBadge = await screen.findByLabelText("xQcOW-milestone");

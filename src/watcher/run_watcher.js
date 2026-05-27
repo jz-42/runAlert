@@ -233,7 +233,7 @@ function maybeAutoUpdateOnce(cfg) {
 }
 
 function buildMilestones(cfg) {
-  const STREAMERS = cfg.streamers?.length ? cfg.streamers : ["xQcOW"];
+  const STREAMERS = cfg.streamers?.length ? cfg.streamers : ["xQc"];
   const DEFAULT_MILESTONES = cfg.defaultMilestones || {
     nether: { thresholdSec: 240, enabled: true },
   };

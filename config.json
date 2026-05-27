@@ -1,6 +1,6 @@
 {
   "streamers": [
-    "xQcOW"
+    "xQc"
   ],
   "clock": "IGT",
   "quietHours": [],
@@ -10,7 +10,7 @@
   },
   "agent": {
     "autoUpdate": true,
-    "forsenOcr": false
+    "backgroundMonitoring": false
   },
   "channels": [
     "desktop"
@@ -46,7 +46,7 @@
     }
   },
   "profiles": {
-    "xQcOW": {
+    "xQc": {
       "nether": {
         "thresholdSec": 240,
         "enabled": true
@@ -56,7 +56,7 @@
         "enabled": true
       },
       "fortress": {
-        "thresholdSec": 600,
+        "thresholdSec": 540,
         "enabled": true
       },
       "first_portal": {
@@ -64,15 +64,15 @@
         "enabled": true
       },
       "stronghold": {
-        "thresholdSec": 840,
+        "thresholdSec": 825,
         "enabled": true
       },
       "end": {
-        "thresholdSec": 960,
+        "thresholdSec": 840,
         "enabled": true
       },
       "finish": {
-        "thresholdSec": 928,
+        "thresholdSec": 858,
         "enabled": true
       }
     }

@@ -239,6 +239,36 @@ function createApp({
     return null;
   }
 
+  async function resolveStreamerProfile(name) {
+    const key = `profileIdentity:${String(name || "").trim().toLowerCase()}`;
+    const cached = cacheGet(key);
+    if (cached) return cached;
+
+    let runId = null;
+    let twitch = null;
+    let uuid = null;
+    try {
+      runId = await paceman.getRecentRunId(name, 1);
+      if (runId) {
+        const world = await paceman.getWorld(runId);
+        twitch = normalizeTwitchHandle(world?.data?.twitch);
+        uuid =
+          typeof world?.data?.uuid === "string" && world.data.uuid.trim()
+            ? world.data.uuid.trim()
+            : null;
+      }
+    } catch {
+      runId = null;
+      twitch = null;
+      uuid = null;
+    }
+
+    const value = { runId, twitch, uuid };
+    // Cache hard: profile identity does not need rapid refresh.
+    cacheSet(key, value, 6 * 60 * 60 * 1000);
+    return value;
+  }
+
   // Allow local dev frontends (Vite often bumps ports if 5173 is taken).
   // Keep this restricted to localhost / 127.0.0.1 for safety.
   app.use(
@@ -296,9 +326,11 @@ function createApp({
   }
 
   function isSupabaseEnabled() {
-    return String(process.env.RUNALERT_CONFIG_STORE || "")
+    const explicit = String(process.env.RUNALERT_CONFIG_STORE || "")
       .trim()
-      .toLowerCase() === "supabase";
+      .toLowerCase();
+    if (explicit === "supabase") return true;
+    return Boolean(SUPABASE_URL && getSupabaseKey());
   }
 
   function getSupabaseKey() {
@@ -502,25 +534,7 @@ function createApp({
           continue;
         }
 
-        let runId = null;
-        let twitch = null;
-        let uuid = null;
-        try {
-          runId = await paceman.getRecentRunId(name, 1);
-          if (runId) {
-            const world = await paceman.getWorld(runId);
-            twitch = normalizeTwitchHandle(world?.data?.twitch);
-            uuid =
-              typeof world?.data?.uuid === "string" && world.data.uuid.trim()
-                ? world.data.uuid.trim()
-                : null;
-          }
-        } catch {
-          // best-effort
-          runId = null;
-          twitch = null;
-          uuid = null;
-        }
+        const { runId, twitch, uuid } = await resolveStreamerProfile(name);
 
         // No-auth MVP: use public avatar services.
         // - Twitch profile image: prefer Helix/decapi, fall back to unavatar.
@@ -557,7 +571,8 @@ function createApp({
 
       const statuses = {};
       for (const name of names) {
-        const twitch = normalizeTwitchHandle(name);
+        const profile = await resolveStreamerProfile(name);
+        const twitch = profile?.twitch || normalizeTwitchHandle(name);
         statuses[name] = {
           isTwitchLive: (await fetchTwitchLive(twitch)) === true,
           twitch,
@@ -988,6 +1003,14 @@ function createApp({
     })
   );
 
+  app.get("/download/windows/exe", (req, res) =>
+    sendReleaseAsset(req, res, {
+      envKey: "RUNALERT_WINDOWS_EXE_URL",
+      pattern: /^runAlert.*\.exe$/i,
+      contentType: "application/octet-stream",
+    })
+  );
+
   app.get("/install/macos.command", (req, res) => {
     const host = req.get("host");
     if (!host) return res.status(400).send("Missing host header.");
@@ -998,7 +1021,7 @@ function createApp({
     const channel = getInstallChannel(req);
     const repoUrl =
       process.env.AGENT_REPO_URL ||
-      "https://github.com/jz-42/Minecraft-Speedrun-Notifier-BETA.git";
+      "https://github.com/jz-42/runAlert.git";
     const script = `#!/bin/bash
 set -euo pipefail
 
@@ -1088,7 +1111,7 @@ echo "You can close this window. Notifications will run in the background."
     const channel = getInstallChannel(req);
     const repoUrl =
       process.env.AGENT_REPO_URL ||
-      "https://github.com/jz-42/Minecraft-Speedrun-Notifier-BETA.git";
+      "https://github.com/jz-42/runAlert.git";
 
     const script = `$ErrorActionPreference = "Stop"
 
