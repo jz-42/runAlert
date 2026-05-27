@@ -22,7 +22,9 @@ dashboard/node_modules/
 # Local env and config
 .env
 .env.*
+configs/
 **/CONTEXT.md
+CONTEXT_EXPORT*.md
 
 # Build output and caches
 dist-app/
