@@ -105,8 +105,8 @@ describe("App", () => {
       screen.queryByRole("link", { name: "Download Windows Installer" })
     ).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Install Help" })
-    ).toBeTruthy();
+      screen.queryByRole("button", { name: "Install help" })
+    ).toBeNull();
   });
 
   it("shows compact browser/app status actions instead of long installer copy", async () => {
@@ -135,8 +135,8 @@ describe("App", () => {
       screen.getByRole("button", { name: "Download Windows Beta" })
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Install Help" })
-    ).toBeTruthy();
+      screen.queryByRole("dialog", { name: "Install help" })
+    ).toBeNull();
     expect(
       screen.queryByText(/plain scripts that clone the public/i)
     ).toBeNull();
@@ -821,7 +821,7 @@ describe("App", () => {
     expect(addBtn).toBeTruthy();
     fireEvent.click(addBtn!);
     const dialog = await screen.findByRole("dialog", { name: /add streamer/i });
-    const input = within(dialog).getByPlaceholderText("e.g. xQcOW");
+    const input = within(dialog).getByPlaceholderText("e.g. xQc");
     fireEvent.change(input, { target: { value: "NewStreamer" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 
@@ -885,7 +885,7 @@ describe("App", () => {
     expect(addBtn).toBeTruthy();
     fireEvent.click(addBtn!);
     const dialog = await screen.findByRole("dialog", { name: /add streamer/i });
-    const input = within(dialog).getByPlaceholderText("e.g. xQcOW");
+    const input = within(dialog).getByPlaceholderText("e.g. xQc");
     fireEvent.change(input, { target: { value: "forsen" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 
@@ -912,7 +912,7 @@ describe("App", () => {
 
     fireEvent.click(await screen.findByTestId("header-quietHours"));
     expect(await screen.findByLabelText("Quiet hours")).toBeTruthy();
-    expect(await screen.findByText(/keep monitoring runs/i)).toBeTruthy();
+    expect(await screen.findByText(/Monitoring continues\./i)).toBeTruthy();
   });
 
   // Test: quiet hours editor saves an array of ranges (multi-span) and enforces max 3 spans
@@ -949,14 +949,18 @@ describe("App", () => {
     fireEvent.click(await screen.findByTestId("header-quietHours"));
     await screen.findByLabelText("Quiet hours");
 
-    const addBtn = await screen.findByText(/Add span/i);
+    const addBtn = await screen.findByRole("button", {
+      name: /\+ Add quiet period/i,
+    });
     // Add 3 spans (max)
     fireEvent.click(addBtn);
     fireEvent.click(addBtn);
     fireEvent.click(addBtn);
 
-    // 4th click should not increase beyond max (button disabled)
-    expect((addBtn as HTMLButtonElement).disabled).toBe(true);
+    // After the 3rd span, the add button should disappear.
+    expect(
+      screen.queryByRole("button", { name: /\+ Add quiet period/i })
+    ).toBeNull();
 
     // Fill spans with valid times
     // Span 0: 9:00 PM -> 9:00 AM (wrap-around)
@@ -1061,7 +1065,9 @@ describe("App", () => {
     fireEvent.click(await screen.findByTestId("header-quietHours"));
     await screen.findByLabelText("Quiet hours");
 
-    const addBtn = await screen.findByText(/Add span/i);
+    const addBtn = await screen.findByRole("button", {
+      name: /\+ Add quiet period/i,
+    });
     fireEvent.click(addBtn);
 
     // Set start=end 9:00 AM -> 9:00 AM
@@ -1120,7 +1126,9 @@ describe("App", () => {
     fireEvent.click(await screen.findByTestId("header-quietHours"));
     await screen.findByLabelText("Quiet hours");
 
-    const addBtn = await screen.findByText(/Add span/i);
+    const addBtn = await screen.findByRole("button", {
+      name: /\+ Add quiet period/i,
+    });
     fireEvent.click(addBtn);
 
     // Test incomplete: missing minute
@@ -1180,7 +1188,9 @@ describe("App", () => {
     fireEvent.click(await screen.findByTestId("header-quietHours"));
     await screen.findByLabelText("Quiet hours");
 
-    const addBtn = await screen.findByText(/Add span/i);
+    const addBtn = await screen.findByRole("button", {
+      name: /\+ Add quiet period/i,
+    });
     fireEvent.click(addBtn);
     fireEvent.click(addBtn);
 
@@ -1265,7 +1275,9 @@ describe("App", () => {
     fireEvent.click(await screen.findByTestId("header-quietHours"));
     await screen.findByLabelText("Quiet hours");
 
-    const addBtn = await screen.findByText(/Add span/i);
+    const addBtn = await screen.findByRole("button", {
+      name: /\+ Add quiet period/i,
+    });
     fireEvent.click(addBtn);
 
     // Test 12:00 AM (midnight) -> 12:00 PM (noon) wrap
@@ -1327,8 +1339,8 @@ describe("App", () => {
     await screen.findByLabelText("Quiet hours");
 
     // Remove the existing span
-    const removeBtn = await screen.findByText("Remove");
-    fireEvent.click(removeBtn);
+    fireEvent.click(await screen.findByLabelText("Remove period"));
+    fireEvent.click(await screen.findByText("Yes"));
 
     fireEvent.click(await screen.findByText("Save"));
 
@@ -1839,7 +1851,7 @@ describe("App", () => {
     vi.useRealTimers();
 
     // Close and re-open; the UI should still show 7:05.
-    fireEvent.click(screen.getByText("Close"));
+    fireEvent.click(screen.getByLabelText("Close"));
     fireEvent.click(streamerBtn!);
 
     const mm2 = await screen.findByLabelText("nether-minutes");
@@ -1897,7 +1909,7 @@ describe("App", () => {
       expect(savedCfg.profiles?.xQcOW?.nether?.thresholdSec).toBe(480);
     });
 
-    fireEvent.click(screen.getByText("Close"));
+    fireEvent.click(screen.getByLabelText("Close"));
     fireEvent.click(streamerBtn!);
 
     const mm2 = await screen.findByLabelText("nether-minutes");

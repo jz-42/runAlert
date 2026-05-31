@@ -195,7 +195,7 @@ a.tag:hover{
   height: clamp(90px, 9vw, 130px);
   flex: 0 0 auto;
   overflow: visible;
-  margin-right: -8px;
+  margin-right: 8px;
 }
 
 .brandText{
