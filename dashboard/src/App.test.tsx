@@ -1502,14 +1502,11 @@ describe("App", () => {
       expect((netherCheckbox as HTMLInputElement).checked).toBe(false);
     });
 
-    // Save manually
-    fireEvent.click(screen.getByText("Save"));
-
     await waitFor(() => {
       expect(savedCfg.profiles?.xQcOW?.nether?.enabled).toBe(false);
       // Threshold should remain unchanged
       expect(savedCfg.profiles?.xQcOW?.nether?.thresholdSec).toBe(240);
-    });
+    }, { timeout: 2000 });
 
     // Toggle bastion off too
     const bastionRow = await screen.findByText("Bastion").then((el) =>
@@ -1525,11 +1522,9 @@ describe("App", () => {
       expect(bastionCheckbox.checked).toBe(false);
     });
 
-    fireEvent.click(screen.getByText("Save"));
-
     await waitFor(() => {
       expect(savedCfg.profiles?.xQcOW?.bastion?.enabled).toBe(false);
-    });
+    }, { timeout: 2000 });
 
     // Toggle nether back on - need to re-find the checkbox after state updates
     const netherRowAfter = await screen.findByText("Nether").then((el) =>
@@ -1542,8 +1537,6 @@ describe("App", () => {
     await waitFor(() => {
       expect(netherCheckboxAfter.checked).toBe(true);
     });
-
-    fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() => {
       expect(savedCfg.profiles?.xQcOW?.nether?.enabled).toBe(true);

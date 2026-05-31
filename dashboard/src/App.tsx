@@ -348,7 +348,10 @@ function App() {
   const [quietDraft, setQuietDraft] = useState<QuietSpanDraft[]>([]);
   const [quietErr, setQuietErr] = useState<string | null>(null);
   const [quietSaving, setQuietSaving] = useState(false);
+  const [quietSaved, setQuietSaved] = useState(false);
   const [confirmRemoveQH, setConfirmRemoveQH] = useState<number | null>(null);
+  const [milestoneSaved, setMilestoneSaved] = useState(false);
+  const milestoneSavedTimerRef = useRef<number | null>(null);
   const [statusByName, setStatusByName] = useState<
     Record<
       string,
@@ -1498,17 +1501,17 @@ function App() {
 
   return (
     <div className="page">
+      <div
+        className="brandMark"
+        data-testid="header-artSlot"
+        aria-hidden="true"
+      >
+        <span className="titleDragon" data-testid="header-dragon" />
+      </div>
       <div className="frame" data-testid="header-frame">
         <div className="titleRow" data-testid="header-titleRow">
           <div className="titleLeft">
             <div className="brandRow" data-testid="header-brandRow">
-              <div
-                className="brandArtSlot"
-                data-testid="header-artSlot"
-                aria-hidden="true"
-              >
-                <span className="titleDragon" data-testid="header-dragon" />
-              </div>
               <div className="brandText">
                 <div className="titleLine">
                   <h1 className="appTitle" data-testid="header-title">
@@ -2010,16 +2013,48 @@ function App() {
               </button>
 
               <button
-                disabled={!cfg || !selected || saving}
+                disabled={!cfg || !selected || saving || milestoneSaved}
                 onClick={async () => {
                   if (autosaveTimerRef.current)
                     clearTimeout(autosaveTimerRef.current);
                   autosaveTimerRef.current = null;
                   await persistDraft("manual");
+                  if (milestoneSavedTimerRef.current) {
+                    window.clearTimeout(milestoneSavedTimerRef.current);
+                  }
+                  setMilestoneSaved(true);
+                  milestoneSavedTimerRef.current = window.setTimeout(() => {
+                    setMilestoneSaved(false);
+                    milestoneSavedTimerRef.current = null;
+                  }, 1200);
                 }}
-                className={`modalBtn ${saving ? "" : "modalBtn--save"}`}
+                className={`modalBtn modalBtn--save${
+                  milestoneSaved ? " saved" : ""
+                }`}
               >
-                {saving ? "Saving…" : "Save"}
+                {milestoneSaved ? (
+                  <>
+                    <svg
+                      className="savedCheck"
+                      viewBox="0 0 14 14"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M2.5 7.5L5.5 10.5L11.5 4"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                      />
+                    </svg>
+                    Saved
+                  </>
+                ) : saving ? (
+                  "Saving…"
+                ) : (
+                  "Save"
+                )}
               </button>
             </div>
           </div>
@@ -2056,16 +2091,16 @@ function App() {
                     draggable={false}
                   />
                 ) : null}
-                {getBadgeData(name) ? (
-                  <span
-                    className={`milestoneBadge ${getBadgeData(name)!.className}`}
-                    aria-label={`${name}-milestone`}
-                    title={badgeTitleFor(name)}
-                  >
-                    {milestoneBadgeText(getBadgeData(name)!.milestone)}
-                  </span>
-                ) : null}
               </button>
+              {getBadgeData(name) ? (
+                <span
+                  className={`milestoneBadge ${getBadgeData(name)!.className}`}
+                  aria-label={`${name}-milestone`}
+                  title={badgeTitleFor(name)}
+                >
+                  {milestoneBadgeText(getBadgeData(name)!.milestone)}
+                </span>
+              ) : null}
               <a
                 className={`label labelLink labelRow ${
                   isStreamerLive(name) ? "labelLive" : ""
@@ -2130,17 +2165,17 @@ function App() {
                   draggable={false}
                 />
               ) : null}
-              {getBadgeData(dragState.name) ? (
-                <span
-                  className={`milestoneBadge ${
-                    getBadgeData(dragState.name)!.className
-                  }`}
-                  aria-hidden="true"
-                >
-                  {milestoneBadgeText(getBadgeData(dragState.name)!.milestone)}
-                </span>
-              ) : null}
             </div>
+            {getBadgeData(dragState.name) ? (
+              <span
+                className={`milestoneBadge ${
+                  getBadgeData(dragState.name)!.className
+                }`}
+                aria-hidden="true"
+              >
+                {milestoneBadgeText(getBadgeData(dragState.name)!.milestone)}
+              </span>
+            ) : null}
             <div className="label">{dragState.name}</div>
             <div className="milestoneSubtitle">
               {subtitleFor(dragState.name) ?? "Last update • —"}
@@ -3063,8 +3098,8 @@ function App() {
 
                     <button
                       type="button"
-                      disabled={quietSaving}
-                      className="qhSave"
+                      disabled={quietSaving || quietSaved}
+                      className={`qhSave${quietSaved ? " saved" : ""}`}
                       onClick={async () => {
                         if (!cfg) return;
                         const v = validateQuietDraft(quietDraft);
@@ -3081,15 +3116,41 @@ function App() {
                             stripLegacyForsenConfig(next)
                           );
                           applyConfig(saved);
-                          setShowQuietHours(false);
+                          setQuietSaving(false);
+                          setQuietSaved(true);
+                          window.setTimeout(() => {
+                            setShowQuietHours(false);
+                            setQuietSaved(false);
+                          }, 900);
                         } catch (e: any) {
                           setQuietErr(e?.message ?? String(e));
-                        } finally {
                           setQuietSaving(false);
                         }
                       }}
                     >
-                      {quietSaving ? "Saving…" : "Save"}
+                      {quietSaved ? (
+                        <>
+                          <svg
+                            className="savedCheck"
+                            viewBox="0 0 14 14"
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M2.5 7.5L5.5 10.5L11.5 4"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              fill="none"
+                            />
+                          </svg>
+                          Saved
+                        </>
+                      ) : quietSaving ? (
+                        "Saving…"
+                      ) : (
+                        "Save"
+                      )}
                     </button>
                   </div>
                 </div>
@@ -3116,7 +3177,16 @@ function App() {
                 <div>
                   <div className="qhTitle">Add Streamer</div>
                   <div className="qhHelp">
-                    Enter a Paceman player name (usually their Twitch handle).
+                    Enter a{" "}
+                    <a
+                      className="installGuideInlineLink"
+                      href="https://paceman.gg/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Paceman
+                    </a>{" "}
+                    player name (not always their Twitch handle).
                   </div>
                 </div>
                 <button
@@ -3146,7 +3216,6 @@ function App() {
               ) : null}
 
               <div className="promptBody">
-                <div className="promptLabel">Streamer name</div>
                 <input
                   className="promptInput"
                   value={addStreamerName}
@@ -3232,7 +3301,7 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  className="qhSave"
+                  className="modalBtn modalBtn--danger modalBtn--solid"
                   onClick={() => {
                     const name = pendingRemove;
                     setPendingRemove(null);
