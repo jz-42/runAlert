@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "setup": "npm install && npm --prefix dashboard install",
+    "run": "npx concurrently -k -n api,ui \"PORT=$CONDUCTOR_PORT npm run start:web\" \"VITE_API_BASE=http://127.0.0.1:$CONDUCTOR_PORT VITE_TWITCH_STATUS_BASE=http://127.0.0.1:$CONDUCTOR_PORT npm --prefix dashboard run dev -- --host 0.0.0.0 --port $((CONDUCTOR_PORT + 1))\""
+  },
+  "runScriptMode": "concurrent"
+}
