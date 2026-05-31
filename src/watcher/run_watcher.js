@@ -280,6 +280,7 @@ const DRY_RUN = parseBool(argv["dry-run"], false); // ← respects "=false"
 const ONCE = parseBool(argv["once"], false);
 const FORCE_SEND = parseBool(argv["force"], false);
 const OVERRIDE_QUIET = parseBool(argv["no-quiet"], false);
+const LIST_STREAMERS = parseBool(argv["list-streamers"], false);
 
 const POLL_RECENT_MS = 20_000; // how often to check for new run IDs
 const POLL_WORLD_MS = 5_000; // how often to check on an active run
@@ -895,6 +896,21 @@ async function main() {
   const { STREAMERS, DEFAULT_MILESTONES, STREAMER_MILESTONES } =
     buildMilestones(cfg);
 
+  if (LIST_STREAMERS) {
+    for (const name of STREAMERS) {
+      const milestones = STREAMER_MILESTONES[name] || DEFAULT_MILESTONES;
+      const summary = Object.entries(milestones)
+        .map(([m, o]) => {
+          const enabled = o.enabled ?? true;
+          const cutoff = o.thresholdSec ?? "∞";
+          return `${enabled ? "" : "!"}${m}<${cutoff}s`;
+        })
+        .join(", ");
+      console.log(`${name}\t${summary}`);
+    }
+    return;
+  }
+
   const cfgOk = validateConfig(cfg, STREAMERS, DEFAULT_MILESTONES);
   if (!cfgOk) {
     console.warn(
@@ -973,11 +989,15 @@ function startHeartbeat() {
 if (require.main === module) {
   // Only load .env in real runtime, not when imported by tests.
   require("dotenv").config();
-  if (shouldStartApi()) {
-    startServer();
+  if (LIST_STREAMERS) {
+    main().then(() => process.exit(0));
+  } else {
+    if (shouldStartApi()) {
+      startServer();
+    }
+    main();
+    startHeartbeat();
   }
-  main();
-  startHeartbeat();
 }
 
 module.exports = {

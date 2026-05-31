@@ -571,8 +571,18 @@ function createApp({
 
       const statuses = {};
       for (const name of names) {
-        const profile = await resolveStreamerProfile(name);
-        const twitch = profile?.twitch || normalizeTwitchHandle(name);
+        const directHandle = normalizeTwitchHandle(name);
+        let twitch = null;
+
+        // Fast path: if the caller already provided a normalized lowercase
+        // Twitch handle, avoid the extra Paceman identity lookup entirely.
+        if (directHandle && directHandle === directHandle.toLowerCase()) {
+          twitch = directHandle;
+        } else {
+          const profile = await resolveStreamerProfile(name);
+          twitch = profile?.twitch || directHandle;
+        }
+
         statuses[name] = {
           isTwitchLive: (await fetchTwitchLive(twitch)) === true,
           twitch,

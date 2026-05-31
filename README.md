@@ -17,6 +17,7 @@ Common flags
 - `--dry-run` : don't actually send notifications; useful when testing
 - `--force` : ignore thresholds and force notification logic
 - `--no-quiet` : ignore `quietHours` in `config.json`
+- `--list-streamers` : print configured streamers (with milestone summary) and exit
 
 Important files
 - `config.json` : list of `streamers`, `defaultMilestones`, and per-streamer `profiles`.
@@ -31,7 +32,8 @@ Env & secrets
 Resetting dedupe
 - To allow re-sending alerts for the same runs while testing, delete or clear `sent_keys.json`.
 
-Next suggested step: add a small CLI helper flag to list configured streamers (`--list-streamers`) for quick checks.
+Quick listing
+- `node src/watcher/run_watcher.js --list-streamers --debug=0` prints each streamer + their milestone summary, then exits.
 
 ---
 
