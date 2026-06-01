@@ -111,7 +111,7 @@
   max-width: 1280px;
   width: 100%;
   margin: 0 auto;
-  padding: clamp(22px, 2.6vw, 34px) clamp(20px, 4vw, 52px) 72px;
+  padding: clamp(20px, 2.5vw, 32px) clamp(20px, 4vw, 52px) 72px;
   position: relative;
   z-index: 1;
 }
@@ -187,14 +187,13 @@ a.tag:hover{
   gap: 0;
 }
 
-.brandMark{
-  position: fixed;
-  top: clamp(8px, 1.4vw, 18px);
-  left: clamp(0px, 1vw, 12px);
-  width: clamp(114px, 10.5vw, 158px);
-  height: clamp(80px, 8vw, 114px);
-  z-index: 10;
-  pointer-events: none;
+.brandArtSlot{
+  position: relative;
+  width: clamp(130px, 12vw, 180px);
+  height: clamp(90px, 9vw, 130px);
+  flex: 0 0 auto;
+  overflow: visible;
+  margin-right: -8px;
 }
 
 .brandText{
@@ -227,7 +226,7 @@ a.tag:hover{
 
 @media (max-width: 900px){
   .titleDragon{ display: none; }
-  .brandMark{ display: none; }
+  .brandArtSlot{ display: none; }
 }
 
 .metaRow{
@@ -261,11 +260,13 @@ a.tag:hover{
 /* ── Pills / Tags ────────────────────────────────────────── */
 
 .utilityRow{
-  margin-top: 6px;
+  margin-top: 10px;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  justify-content: center;
+  align-self: stretch;
+  justify-content: flex-start;
+  transform: translateY(-2px);
 }
 
 .utilityCard{
@@ -487,7 +488,7 @@ a.tag:hover{
 /* ── Streamer Grid ───────────────────────────────────────── */
 
 .grid{
-  margin-top: 22px;
+  margin-top: 32px;
   display: grid;
   grid-template-columns: repeat(auto-fit, 160px);
   justify-content: center;
