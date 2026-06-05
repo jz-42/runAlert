@@ -118,15 +118,20 @@ export async function getConfig() {
 }
 
 export async function putConfig(cfg: unknown) {
+  await putConfigRaw(cfg);
+
+  // Don't trust PUT response shape — re-fetch canonical config
+  return getConfig();
+}
+
+export async function putConfigRaw(cfg: unknown) {
   const r = await fetch(configUrl(), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(cfg),
   });
   if (!r.ok) throw new Error(`PUT /config ${r.status}`);
-
-  // Don't trust PUT response shape — re-fetch canonical config
-  return getConfig();
+  return r.json().catch(() => ({}));
 }
 
 export async function testNotify(title?: string, message?: string) {

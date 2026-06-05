@@ -47,6 +47,22 @@ function mockFetchSequence(
   });
 }
 
+function makeJsonResponse(json: any, ok = true, status = ok ? 200 : 500) {
+  return {
+    ok,
+    status,
+    json: async () => json,
+  };
+}
+
+function createDeferredResponse() {
+  let resolve!: (value: any) => void;
+  const promise = new Promise<any>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
 describe("App", () => {
   beforeEach(() => {
     // Reset mocks between tests so calls don’t bleed across test cases.
@@ -319,6 +335,121 @@ describe("App", () => {
     });
   });
 
+  it("keeps the latest notification-sound toggle when stale save responses arrive late", async () => {
+    const initialConfig = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+      notifications: {
+        enabled: true,
+        sound: true,
+      },
+    };
+
+    const firstSave = createDeferredResponse();
+    const secondSave = createDeferredResponse();
+    const putBodies: any[] = [];
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn((url: string, options?: RequestInit) => {
+      const u = String(url);
+      const method = String(options?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "GET") {
+        return Promise.resolve(makeJsonResponse(initialConfig));
+      }
+      if (u.includes("/config") && method === "PUT" && putBodies.length === 0) {
+        putBodies.push(JSON.parse(String(options?.body || "{}")));
+        return firstSave.promise;
+      }
+      if (u.includes("/config") && method === "PUT" && putBodies.length === 1) {
+        putBodies.push(JSON.parse(String(options?.body || "{}")));
+        return secondSave.promise;
+      }
+      if (u.includes("/profiles")) {
+        return Promise.resolve(makeJsonResponse({ ok: true, profiles: {} }));
+      }
+      if (u.includes("/status")) {
+        return Promise.resolve(makeJsonResponse({ ok: true, statuses: {} }));
+      }
+      if (u.includes("/twitch/status")) {
+        return Promise.resolve(makeJsonResponse({ ok: true, statuses: {} }));
+      }
+      return Promise.resolve(makeJsonResponse({ ok: true }));
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(screen.getByLabelText("Turn notification sound off"));
+    fireEvent.click(screen.getByLabelText("Turn notification sound on"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Turn notification sound off")
+      ).toBeTruthy();
+    });
+
+    expect(putBodies[0]?.notifications?.sound).toBe(false);
+
+    firstSave.resolve(makeJsonResponse({ ok: true }));
+    await waitFor(() => {
+      expect(putBodies).toHaveLength(2);
+    });
+
+    expect(putBodies[1]?.notifications?.sound).toBe(true);
+    secondSave.resolve(makeJsonResponse({ ok: true }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Turn notification sound off")
+      ).toBeTruthy();
+    });
+
+    expect(putBodies.at(-1)?.notifications?.sound).toBe(true);
+  });
+
+  it("hides background monitoring from browser settings", async () => {
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+          notifications: {
+            enabled: true,
+            sound: true,
+          },
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(screen.getByLabelText("Open settings"));
+
+    const notificationsBtn = await screen.findByRole("button", {
+      name: "Notifications",
+    });
+    const settingsMenu = notificationsBtn.closest(".settingsMenu");
+    expect(settingsMenu).toBeTruthy();
+    expect(
+      within(settingsMenu as HTMLElement).getByRole("button", {
+        name: "Quiet Hours",
+      })
+    ).toBeTruthy();
+    expect(
+      within(settingsMenu as HTMLElement).queryByRole("button", {
+        name: "Background Monitoring",
+      })
+    ).toBeNull();
+  });
+
   it("shows macOS notification guidance inside desktop notification settings", async () => {
     (window as any).runAlertDesktop = { platform: "darwin" };
     mockFetchSequence([
@@ -484,6 +615,77 @@ describe("App", () => {
     expect(
       screen.getByText(/If you quit runAlert, this stops until you open it again\./i)
     ).toBeTruthy();
+  });
+
+  it("persists agent auto-update through the background monitoring settings", async () => {
+    (window as any).runAlertDesktop = { platform: "darwin" };
+
+    const initialConfig = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: {},
+      profiles: {},
+      agent: {
+        autoUpdate: false,
+        backgroundMonitoring: true,
+      },
+    };
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      const u = String(url);
+      const method = options?.method || "GET";
+
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(initialConfig);
+      }
+
+      if (u.includes("/config") && method === "PUT") {
+        return makeJsonResponse(JSON.parse(String(options?.body || "{}")));
+      }
+
+      if (u.includes("/profiles")) {
+        return makeJsonResponse({ ok: true, profiles: {} });
+      }
+
+      if (u.includes("/status")) {
+        return makeJsonResponse({ ok: true, statuses: {} });
+      }
+
+      if (u.includes("/twitch/status")) {
+        return makeJsonResponse({ ok: true, statuses: {} });
+      }
+
+      throw new Error(`Unexpected fetch: ${u}`);
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(screen.getByLabelText("Open background monitoring settings"));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Background monitoring",
+    });
+    const toggle = within(dialog).getByRole("checkbox", {
+      name: /Auto‑update agent on launch/i,
+    });
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      const putCalls = (globalThis.fetch as any).mock.calls.filter(
+        ([url, options]: [string, RequestInit]) =>
+          String(url).includes("/config") && options?.method === "PUT"
+      );
+      const lastPut = putCalls[putCalls.length - 1];
+      expect(JSON.parse(String(lastPut[1].body))).toMatchObject({
+        agent: {
+          autoUpdate: true,
+          backgroundMonitoring: true,
+        },
+      });
+    });
   });
 
   it("removes the legacy forsen OCR control from background settings and strips it on save", async () => {
@@ -892,6 +1094,94 @@ describe("App", () => {
     expect(await screen.findByText("forsen")).toBeTruthy();
   });
 
+  it("rolls back add streamer optimistic UI on save failure", async () => {
+    const initialCfg = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: any) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(initialCfg);
+      }
+      if (u.includes("/config") && method === "PUT") {
+        return makeJsonResponse({ ok: false }, false, 500);
+      }
+      return makeJsonResponse({ ok: true, profiles: {}, statuses: {} });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    const addBtn = document.querySelector(
+      "button.avatarBtn.add"
+    ) as HTMLButtonElement | null;
+    expect(addBtn).toBeTruthy();
+    fireEvent.click(addBtn!);
+
+    const dialog = await screen.findByRole("dialog", { name: /add streamer/i });
+    const input = within(dialog).getByPlaceholderText("e.g. xQc");
+    fireEvent.change(input, { target: { value: "forsen" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+
+    expect(screen.getByText("forsen")).toBeTruthy();
+
+    await waitFor(() => {
+      expect(screen.queryByText("forsen")).toBeNull();
+    });
+    expect(await screen.findByText("PUT /config 500")).toBeTruthy();
+  });
+
+  it("rolls back remove streamer optimistic UI on save failure", async () => {
+    const initialCfg = {
+      streamers: ["xQcOW", "forsen"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: any) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(initialCfg);
+      }
+      if (u.includes("/config") && method === "PUT") {
+        return makeJsonResponse({ ok: false }, false, 500);
+      }
+      return makeJsonResponse({ ok: true, profiles: {}, statuses: {} });
+    });
+
+    render(<App />);
+    await screen.findByText("forsen");
+
+    const forsenBtn = Array.from(
+      document.querySelectorAll("div.avatarTile button.avatarBtn")
+    ).find((btn) => btn.closest(".avatarTile")?.textContent?.includes("forsen")) as
+      | HTMLButtonElement
+      | undefined;
+    expect(forsenBtn).toBeTruthy();
+    fireEvent.click(forsenBtn!);
+
+    fireEvent.click(screen.getByLabelText("Remove streamer"));
+
+    const dialog = await screen.findByRole("dialog", { name: "Remove streamer" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+
+    await waitFor(() => {
+      expect(screen.queryAllByText("forsen").length).toBeGreaterThan(0);
+    });
+    expect(await screen.findByText("PUT /config 500")).toBeTruthy();
+  });
+
   // Test: clicking the header Quiet Hours pill opens the Quiet Hours modal
   it("clicking the header Quiet Hours pill opens the Quiet Hours modal", async () => {
     mockFetchSequence([
@@ -1034,6 +1324,125 @@ describe("App", () => {
     });
   });
 
+  it("autosaves quiet-hours edits on blur without requiring the Save button", async () => {
+    const initialCfg: any = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: ["22:30-07:15"],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+
+    let savedCfg = structuredClone(initialCfg);
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: any) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "PUT") {
+        savedCfg = JSON.parse(String(init?.body || "{}"));
+        return makeJsonResponse({ ok: true });
+      }
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(savedCfg);
+      }
+      return makeJsonResponse({ ok: true });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(await screen.findByTestId("header-quietHours"));
+    const startMinute = await screen.findByLabelText("quiet-0-start-minute");
+    fireEvent.change(startMinute, { target: { value: "45" } });
+    fireEvent.blur(startMinute);
+
+    await waitFor(() => {
+      expect(savedCfg.quietHours).toEqual(["22:45-07:15"]);
+    });
+  });
+
+  it("reverts quiet-hours edits to the last confirmed state on save failure", async () => {
+    const initialCfg: any = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: ["22:30-07:15"],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: any) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(initialCfg);
+      }
+      if (u.includes("/config") && method === "PUT") {
+        return makeJsonResponse({ ok: false }, false, 500);
+      }
+      return makeJsonResponse({ ok: true });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(await screen.findByTestId("header-quietHours"));
+    const startMinute = await screen.findByLabelText("quiet-0-start-minute");
+    fireEvent.change(startMinute, { target: { value: "45" } });
+    fireEvent.blur(startMinute);
+
+    expect(await screen.findByText("PUT /config 500")).toBeTruthy();
+    await waitFor(() => {
+      expect((screen.getByLabelText("quiet-0-start-minute") as HTMLInputElement).value).toBe(
+        "30"
+      );
+    });
+  });
+
+  it("shows brief Saved feedback only when the quiet-hours Save button is clicked", async () => {
+    const initialCfg: any = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: ["22:30-07:15"],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+
+    let savedCfg = structuredClone(initialCfg);
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: any) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "PUT") {
+        savedCfg = JSON.parse(String(init?.body || "{}"));
+        return makeJsonResponse({ ok: true });
+      }
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(savedCfg);
+      }
+      return makeJsonResponse({ ok: true });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    fireEvent.click(await screen.findByTestId("header-quietHours"));
+    const startMinute = await screen.findByLabelText("quiet-0-start-minute");
+    fireEvent.change(startMinute, { target: { value: "45" } });
+
+    expect(screen.queryByText("Saved")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(savedCfg.quietHours).toEqual(["22:45-07:15"]);
+      expect(screen.getByText("Saved")).toBeTruthy();
+    });
+
+  });
+
   // Test: quiet hours editor blocks invalid entries (start=end)
   it("quiet hours editor blocks invalid entries (start=end)", async () => {
     const initialCfg: any = {
@@ -1069,6 +1478,7 @@ describe("App", () => {
       name: /\+ Add quiet period/i,
     });
     fireEvent.click(addBtn);
+    const putCallsAfterAdd = putCalls;
 
     // Set start=end 9:00 AM -> 9:00 AM
     fireEvent.change(await screen.findByLabelText("quiet-0-start-hour"), {
@@ -1092,7 +1502,7 @@ describe("App", () => {
 
     fireEvent.click(await screen.findByText("Save"));
     expect(await screen.findByText(/start and end cannot be the same/i)).toBeTruthy();
-    expect(putCalls).toBe(0);
+    expect(putCalls).toBe(putCallsAfterAdd);
   });
 
   // Test: quiet hours editor blocks incomplete/invalid inputs
@@ -1130,6 +1540,7 @@ describe("App", () => {
       name: /\+ Add quiet period/i,
     });
     fireEvent.click(addBtn);
+    const putCallsAfterAdd = putCalls;
 
     // Test incomplete: missing minute
     fireEvent.change(await screen.findByLabelText("quiet-0-start-hour"), {
@@ -1153,7 +1564,7 @@ describe("App", () => {
 
     fireEvent.click(await screen.findByText("Save"));
     expect(await screen.findByText(/incomplete or invalid/i)).toBeTruthy();
-    expect(putCalls).toBe(0);
+    expect(putCalls).toBe(putCallsAfterAdd);
   });
 
   // Test: quiet hours editor allows overlapping spans (overlaps are fine)
@@ -1437,6 +1848,158 @@ describe("App", () => {
     await waitFor(() => {
       expect(savedCfg.profiles?.xQcOW?.nether?.thresholdSec).toBe(290);
     });
+  });
+
+  it("flushes milestone edits on blur without requiring the Save button", async () => {
+    const initialCfg: any = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {
+        xQcOW: {
+          nether: { thresholdSec: 240, enabled: true },
+        },
+      },
+    };
+
+    let savedCfg = structuredClone(initialCfg);
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: any) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "PUT") {
+        savedCfg = JSON.parse(String(init?.body || "{}"));
+        return makeJsonResponse({ ok: true });
+      }
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(savedCfg);
+      }
+      return makeJsonResponse({ ok: true });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    const streamerBtn = document.querySelector(
+      "div.avatarTile button.avatarBtn"
+    ) as HTMLButtonElement | null;
+    expect(streamerBtn).toBeTruthy();
+    fireEvent.click(streamerBtn!);
+
+    const mmInput = await screen.findByLabelText("nether-minutes");
+    fireEvent.change(mmInput, { target: { value: "5" } });
+    fireEvent.blur(mmInput);
+
+    await waitFor(() => {
+      expect(savedCfg.profiles?.xQcOW?.nether?.thresholdSec).toBe(300);
+    });
+  });
+
+  it("shows brief Saved feedback only when the milestone Save button is clicked", async () => {
+    const initialCfg: any = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {
+        xQcOW: {
+          nether: { thresholdSec: 240, enabled: true },
+        },
+      },
+    };
+
+    let savedCfg = structuredClone(initialCfg);
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: any) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "PUT") {
+        savedCfg = JSON.parse(String(init?.body || "{}"));
+        return makeJsonResponse({ ok: true });
+      }
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(savedCfg);
+      }
+      return makeJsonResponse({ ok: true });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    const streamerBtn = document.querySelector(
+      "div.avatarTile button.avatarBtn"
+    ) as HTMLButtonElement | null;
+    expect(streamerBtn).toBeTruthy();
+    fireEvent.click(streamerBtn!);
+
+    const mmInput = await screen.findByLabelText("nether-minutes");
+    fireEvent.change(mmInput, { target: { value: "5" } });
+
+    expect(screen.queryByText("Saved")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(savedCfg.profiles?.xQcOW?.nether?.thresholdSec).toBe(300);
+      expect(screen.getByText("Saved")).toBeTruthy();
+    });
+
+  });
+
+  it("keeps the latest milestone edit when the panel closes before debounce completes", async () => {
+    const initialCfg: any = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {
+        xQcOW: {
+          nether: { thresholdSec: 240, enabled: true },
+        },
+      },
+    };
+
+    let savedCfg = structuredClone(initialCfg);
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: any) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "PUT") {
+        savedCfg = JSON.parse(String(init?.body || "{}"));
+        return makeJsonResponse({ ok: true });
+      }
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(savedCfg);
+      }
+      return makeJsonResponse({ ok: true });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    const streamerBtn = document.querySelector(
+      "div.avatarTile button.avatarBtn"
+    ) as HTMLButtonElement | null;
+    expect(streamerBtn).toBeTruthy();
+    fireEvent.click(streamerBtn!);
+
+    const mmInput = await screen.findByLabelText("nether-minutes");
+    fireEvent.change(mmInput, { target: { value: "5" } });
+    fireEvent.click(screen.getByText("Close"));
+
+    await waitFor(() => {
+      expect(savedCfg.profiles?.xQcOW?.nether?.thresholdSec).toBe(300);
+    });
+
+    fireEvent.click(streamerBtn!);
+
+    const reopenedMinutes = screen.getByLabelText("nether-minutes");
+    expect((reopenedMinutes as HTMLInputElement).value).toBe("5");
+    expect(savedCfg.profiles?.xQcOW?.nether?.thresholdSec).toBe(300);
   });
 
   // Test: toggles milestone enabled state and persists it

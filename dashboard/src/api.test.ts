@@ -9,6 +9,7 @@ import {
   getToken,
   isDesktopApp,
   putConfig,
+  putConfigRaw,
   testNotify,
 } from "./api";
 
@@ -154,6 +155,31 @@ describe("dashboard api helpers", () => {
       "/config?token=abc123"
     );
     expect(result).toEqual({ streamers: ["xQcOW"] });
+  });
+
+  it("putConfigRaw sends PUT /config without a follow-up GET", async () => {
+    window.localStorage.setItem("runalert-token", "abc123");
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const result = await putConfigRaw({ streamers: ["xQcOW"] });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0] || "")).toContain(
+      "/config?token=abc123"
+    );
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ streamers: ["xQcOW"] }),
+      })
+    );
+    expect(result).toEqual({ ok: true });
   });
 
   it("dedupes names for profile and status requests and short-circuits empty input", async () => {
