@@ -32,3 +32,20 @@ jobs:
       - name: Dashboard tests
         run: npm test
         working-directory: dashboard
+
+      - name: Install Playwright browsers (Chromium + Firefox)
+        run: npx playwright install --with-deps chromium firefox
+        working-directory: dashboard
+
+      - name: Dashboard layout invariants (Playwright)
+        run: npm run test:layout
+        working-directory: dashboard
+
+      - name: Upload Playwright artifacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-playwright-artifacts
+          path: |
+            dashboard/test-results
+            dashboard/playwright-report

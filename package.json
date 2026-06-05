@@ -23,9 +23,10 @@
     "test:watch": "vitest",
     "test:backend": "vitest run",
     "test:dashboard": "npm --prefix dashboard test",
+    "test:layout": "npm --prefix dashboard run test:layout",
     "test:visual": "npm --prefix dashboard run test:visual",
     "test:visual:update": "npm --prefix dashboard run test:visual:update",
-    "test:all": "npm run test:backend && npm run test:dashboard",
+    "test:all": "npm run test:backend && npm run test:dashboard && npm run test:layout",
     "test:all:with-visual": "npm run test:all && npm run test:visual"
   },
   "dependencies": {
