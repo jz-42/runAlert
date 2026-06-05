@@ -10,10 +10,11 @@ import {
   getToken,
   isDesktopApp,
   testNotify,
-  putConfig,
+  putConfigRaw,
 } from "./api";
 import { trackEvent } from "./analytics";
 import { CANONICAL_MILESTONES, milestoneLabel } from "./config";
+import { useConfigSurface } from "./persistence/useConfigSurface";
 
 type MilestoneCfg = { thresholdSec?: number; enabled?: boolean };
 type Config = {
@@ -328,7 +329,7 @@ function App() {
     useState("Copy install command");
 
   const [draft, setDraft] = useState<Record<string, MilestoneCfg>>({});
-  const [saving, setSaving] = useState(false);
+  const draftRef = useRef(draft);
   const [testStatus, setTestStatus] = useState<
     "idle" | "sending" | "success" | "error"
   >("idle");
@@ -343,15 +344,34 @@ function App() {
   const [allToggleOn, setAllToggleOn] = useState(true);
   const [allToggleOwner, setAllToggleOwner] = useState<string | null>(null);
 
-  const [cfg, setCfg] = useState<Config | null>(null);
+  const configSurface = useConfigSurface<Config | null>({
+    initialValue: null,
+    save: async (next) => {
+      if (!next) return next;
+      const sanitized = stripLegacyForsenConfig(next);
+      const saved = await putConfigRaw(sanitized);
+      if (
+        saved &&
+        typeof saved === "object" &&
+        "streamers" in (saved as Record<string, unknown>)
+      ) {
+        return stripLegacyForsenConfig(saved as Config);
+      }
+      return sanitized;
+    },
+  });
+  const cfg = configSurface.value;
+  const confirmedCfg = configSurface.confirmedValue;
   const [err, setErr] = useState<string | null>(null);
   const [quietDraft, setQuietDraft] = useState<QuietSpanDraft[]>([]);
+  const quietDraftRef = useRef(quietDraft);
   const [quietErr, setQuietErr] = useState<string | null>(null);
-  const [quietSaving, setQuietSaving] = useState(false);
-  const [quietSaved, setQuietSaved] = useState(false);
   const [confirmRemoveQH, setConfirmRemoveQH] = useState<number | null>(null);
+  const [milestoneErr, setMilestoneErr] = useState<string | null>(null);
   const [milestoneSaved, setMilestoneSaved] = useState(false);
+  const [quietSaved, setQuietSaved] = useState(false);
   const milestoneSavedTimerRef = useRef<number | null>(null);
+  const quietSavedTimerRef = useRef<number | null>(null);
   const [statusByName, setStatusByName] = useState<
     Record<
       string,
@@ -407,9 +427,6 @@ function App() {
     insertIndex: number;
   } | null>(null);
 
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hydratingDraftRef = useRef(false);
-  const queuedSaveRef = useRef(false);
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const suppressOpenRef = useRef(false);
@@ -458,9 +475,79 @@ function App() {
   const notificationSoundEnabled = cfg?.notifications?.sound ?? true;
   const agentAutoUpdateEnabled = cfg?.agent?.autoUpdate ?? false;
   const backgroundMonitoringEnabled = cfg?.agent?.backgroundMonitoring ?? false;
+  const quietSaving = false;
 
   function applyConfig(next: Config) {
-    setCfg(stripLegacyForsenConfig(next));
+    configSurface.hydrateConfirmed(stripLegacyForsenConfig(next));
+  }
+
+  function updateConfig(
+    updater: (current: Config) => Config,
+    options: {
+      save: "immediate" | "debounced";
+      debounceMs?: number;
+      onError?: (message: string) => void;
+      onSuccess?: () => void;
+    } = { save: "immediate" }
+  ) {
+    if (!configSurface.value) return;
+    configSurface.applyOptimisticChange((current) => {
+      if (!current) return current;
+      return stripLegacyForsenConfig(updater(structuredClone(current)));
+    });
+
+    if (options.save === "debounced") {
+      configSurface.scheduleDebouncedSave(options.debounceMs ?? 700);
+      return;
+    }
+
+    void configSurface
+      .flushNow()
+      .then(() => options.onSuccess?.())
+      .catch((e: any) => options.onError?.(e?.message ?? String(e)));
+  }
+
+  async function flushConfigNow(onError?: (message: string) => void) {
+    try {
+      await configSurface.flushNow();
+      return true;
+    } catch (e: any) {
+      onError?.(e?.message ?? String(e));
+      return false;
+    }
+  }
+
+  function restoreQuietDraftFromConfirmed() {
+    if (!confirmedCfg) return;
+    const fromCfg = normalizeQuietHoursToArray(confirmedCfg.quietHours)
+      .map(parseQuietRangeToDraft)
+      .filter(Boolean) as QuietSpanDraft[];
+    setQuietDraft(fromCfg.length ? fromCfg.slice(0, MAX_QUIET_SPANS) : []);
+  }
+
+  function updateMilestoneDraft(
+    streamerName: string,
+    nextDraft: Record<string, MilestoneCfg>,
+    options: {
+      save: "immediate" | "debounced";
+      debounceMs?: number;
+      onError?: (message: string) => void;
+      onSuccess?: () => void;
+    }
+  ) {
+    setDraft(nextDraft);
+    setMilestoneErr(null);
+    updateConfig(
+      (nextCfg) => {
+        nextCfg.profiles = nextCfg.profiles || {};
+        nextCfg.profiles[streamerName] = {
+          ...(nextCfg.profiles[streamerName] || {}),
+          ...nextDraft,
+        };
+        return nextCfg;
+      },
+      options
+    );
   }
 
   function getTwitchUrl(name: string) {
@@ -553,22 +640,27 @@ function App() {
     enabled?: boolean;
     sound?: boolean;
   }) {
-    if (!cfg) return;
-    const updated = structuredClone(cfg);
-    updated.notifications = {
-      ...(updated.notifications || {}),
-      enabled,
-      sound,
-    };
-    applyConfig(updated);
     setErr(null);
-    void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
-      setErr(e?.message ?? String(e))
+    updateConfig(
+      (updated) => {
+        updated.notifications = {
+          ...(updated.notifications || {}),
+          enabled,
+          sound,
+        };
+        return updated;
+      },
+      {
+        save: "immediate",
+        onError: (message) => setErr(message),
+      }
     );
   }
 
   function toggleNotificationsEnabled(next: boolean) {
-    updateNotificationPrefs({ enabled: next });
+    updateNotificationPrefs(
+      next ? { enabled: true } : { enabled: false, sound: false }
+    );
   }
 
   function toggleNotificationSound(next: boolean) {
@@ -576,17 +668,20 @@ function App() {
   }
 
   function updateBackgroundMonitoring(next: boolean) {
-    if (!cfg) return;
-    const updated = structuredClone(cfg);
-    updated.agent = {
-      ...(updated.agent || {}),
-      autoUpdate: updated.agent?.autoUpdate ?? agentAutoUpdateEnabled,
-      backgroundMonitoring: next,
-    };
-    applyConfig(updated);
     setErr(null);
-    void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
-      setErr(e?.message ?? String(e))
+    updateConfig(
+      (updated) => {
+        updated.agent = {
+          ...(updated.agent || {}),
+          autoUpdate: updated.agent?.autoUpdate ?? agentAutoUpdateEnabled,
+          backgroundMonitoring: next,
+        };
+        return updated;
+      },
+      {
+        save: "immediate",
+        onError: (message) => setErr(message),
+      }
     );
   }
 
@@ -768,6 +863,35 @@ function App() {
     return { ok: true, ranges };
   }
 
+  function queueQuietHoursDraft(
+    nextDraft: QuietSpanDraft[],
+    save: "immediate" | "debounced"
+  ) {
+    setQuietDraft(nextDraft);
+    const validation = validateQuietDraft(nextDraft);
+    if (!validation.ok) {
+      configSurface.cancelDebounce();
+      setQuietErr(validation.error || "Invalid quiet hours.");
+      return;
+    }
+
+    setQuietErr(null);
+    updateConfig(
+      (nextCfg) => {
+        nextCfg.quietHours = validation.ranges;
+        return nextCfg;
+      },
+      {
+        save,
+        debounceMs: 700,
+        onError: (message) => {
+          setQuietErr(message);
+          restoreQuietDraftFromConfirmed();
+        },
+      }
+    );
+  }
+
   function openAddStreamerPrompt() {
     if (cfg && (cfg.streamers ?? []).length >= MAX_STREAMERS) {
       setErr(
@@ -806,29 +930,24 @@ function App() {
       return;
     }
 
-    // Optimistic UI update
-    const optimistic: Config = structuredClone(cfg);
-    optimistic.streamers = [...(optimistic.streamers ?? []), name];
-    applyConfig(optimistic);
     setErr(null);
 
     // Close modal immediately for a snappy feel
     setShowAddStreamer(false);
 
-    try {
-      const saved = await putConfig(stripLegacyForsenConfig(optimistic));
-      applyConfig(saved);
-      void trackEvent("streamer_added", { streamer: name });
-    } catch (e: any) {
-      setErr(e?.message ?? String(e));
-      // Roll back to canonical config if save fails
-      try {
-        const latest = await getConfig();
-        applyConfig(latest);
-      } catch {
-        // keep existing error
+    updateConfig(
+      (optimistic) => {
+        optimistic.streamers = [...(optimistic.streamers ?? []), name];
+        return optimistic;
+      },
+      {
+        save: "immediate",
+        onError: (message) => setErr(message),
+        onSuccess: () => {
+          void trackEvent("streamer_added", { streamer: name });
+        },
       }
-    }
+    );
   }
 
   async function removeStreamer(name: string) {
@@ -846,16 +965,6 @@ function App() {
       return;
     }
 
-    // Optimistic UI update
-    const optimistic: Config = structuredClone(cfg);
-    optimistic.streamers = (optimistic.streamers ?? []).filter(
-      (s) => s !== name
-    );
-    // Optionally delete the profile
-    if (optimistic.profiles?.[name]) {
-      delete optimistic.profiles[name];
-    }
-    applyConfig(optimistic);
     setErr(null);
 
     // Close the panel if this streamer was selected
@@ -863,20 +972,24 @@ function App() {
       setSelected(null);
     }
 
-    try {
-      const saved = await putConfig(stripLegacyForsenConfig(optimistic));
-      applyConfig(saved);
-      void trackEvent("streamer_removed", { streamer: name });
-    } catch (e: any) {
-      setErr(e?.message ?? String(e));
-      // Roll back to canonical config if save fails
-      try {
-        const latest = await getConfig();
-        applyConfig(latest);
-      } catch {
-        // keep existing error
+    updateConfig(
+      (optimistic) => {
+        optimistic.streamers = (optimistic.streamers ?? []).filter(
+          (s) => s !== name
+        );
+        if (optimistic.profiles?.[name]) {
+          delete optimistic.profiles[name];
+        }
+        return optimistic;
+      },
+      {
+        save: "immediate",
+        onError: (message) => setErr(message),
+        onSuccess: () => {
+          void trackEvent("streamer_removed", { streamer: name });
+        },
       }
-    }
+    );
   }
 
   useEffect(() => {
@@ -1014,77 +1127,29 @@ function App() {
     };
   }, [cfg]);
 
-  async function persistDraft(reason: "manual" | "autosave") {
-    if (!cfg || !selected) return;
-
-    // If a save is already in-flight, queue one more attempt (Enter should "eventually" win).
-    if (saving) {
-      queuedSaveRef.current = true;
-      return;
-    }
-
-    setSaving(true);
-    setErr(null);
-    try {
-      const next = structuredClone(cfg);
-      next.profiles = next.profiles || {};
-      next.profiles[selected] = next.profiles[selected] || {};
-
-      // Write milestone overrides into the profile
-      for (const [milestone, mcfg] of Object.entries(draft)) {
-        next.profiles[selected][milestone] = {
-          ...next.profiles[selected][milestone],
-          ...mcfg,
-        };
-      }
-
-      const saved = await putConfig(stripLegacyForsenConfig(next));
-      applyConfig(saved);
-      void trackEvent("milestone_edited", {
-        streamer: selected,
-        reason,
-      });
-    } catch (e: any) {
-      // If autosave fails, don't be noisy beyond showing the error; user can still hit Save.
-      setErr(e?.message ?? String(e));
-    } finally {
-      setSaving(false);
-
-      if (queuedSaveRef.current) {
-        queuedSaveRef.current = false;
-        // Fire-and-forget: run one more save with the latest draft.
-        void persistDraft(reason);
-      }
-    }
-  }
-
   useEffect(() => {
     if (!selected) return;
-    hydratingDraftRef.current = true;
     setDraft(getMilestonesForStreamer(selected));
   }, [selected, cfg]);
 
-  // Debounced autosave: whenever the user edits `draft`, persist after a short pause.
   useEffect(() => {
-    if (!selected || !cfg) return;
+    draftRef.current = draft;
+  }, [draft]);
 
-    // Don't autosave when we are hydrating draft from config changes.
-    if (hydratingDraftRef.current) {
-      hydratingDraftRef.current = false;
-      return;
-    }
+  useEffect(() => {
+    quietDraftRef.current = quietDraft;
+  }, [quietDraft]);
 
-    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = setTimeout(() => {
-      void persistDraft("autosave");
-    }, 700);
-
+  useEffect(() => {
     return () => {
-      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
-      autosaveTimerRef.current = null;
+      if (milestoneSavedTimerRef.current) {
+        window.clearTimeout(milestoneSavedTimerRef.current);
+      }
+      if (quietSavedTimerRef.current) {
+        window.clearTimeout(quietSavedTimerRef.current);
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, selected]);
+  }, []);
 
   useEffect(() => {
     if (!dragCandidate && !dragState) return;
@@ -1179,10 +1244,15 @@ function App() {
     const current = cfg.streamers ?? [];
     const next = getReorderedStreamers(fromIdx, insertIndex, current);
     if (next.every((name, idx) => name === current[idx])) return;
-    const updated = { ...cfg, streamers: next };
-    applyConfig(updated);
-    void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
-      setErr(e?.message ?? String(e))
+    updateConfig(
+      (updated) => {
+        updated.streamers = next;
+        return updated;
+      },
+      {
+        save: "immediate",
+        onError: (message) => setErr(message),
+      }
     );
   };
 
@@ -1852,14 +1922,20 @@ function App() {
                   disabled={!anyMilestones}
                   onChange={(e) => {
                     if (!anyMilestones) return;
+                    if (!selected) return;
                     const nextEnabled = e.target.checked;
                     setAllToggleOn(nextEnabled);
-                    setDraft((d) => {
-                      const next = { ...d };
-                      for (const key of Object.keys(next)) {
-                        next[key] = { ...next[key], enabled: nextEnabled };
-                      }
-                      return next;
+                    const streamerName = selected;
+                    const nextDraft = { ...draftRef.current };
+                    for (const key of Object.keys(nextDraft)) {
+                      nextDraft[key] = {
+                        ...nextDraft[key],
+                        enabled: nextEnabled,
+                      };
+                    }
+                    updateMilestoneDraft(streamerName, nextDraft, {
+                      save: "immediate",
+                      onError: (message) => setMilestoneErr(message),
                     });
                   }}
                 />
@@ -1896,8 +1972,11 @@ function App() {
                           min={0}
                           step={1}
                           onChange={(e) => {
+                            if (!selected) return;
+                            const streamerName = selected;
                             const raw = e.target.value;
-                            const cur = draft[milestone]?.thresholdSec;
+                            const currentDraft = draftRef.current;
+                            const cur = currentDraft[milestone]?.thresholdSec;
                             const curMm =
                               typeof cur === "number"
                                 ? Math.floor(cur / 60)
@@ -1914,21 +1993,25 @@ function App() {
                                 ? undefined
                                 : (nextMm ?? curMm) * 60 + curSs;
 
-                            setDraft((d) => ({
-                              ...d,
+                            const nextDraft = {
+                              ...currentDraft,
                               [milestone]: {
-                                ...d[milestone],
+                                ...currentDraft[milestone],
                                 thresholdSec: nextSec,
                               },
-                            }));
+                            };
+                            updateMilestoneDraft(streamerName, nextDraft, {
+                              save: "debounced",
+                              debounceMs: 700,
+                            });
+                          }}
+                          onBlur={() => {
+                            void flushConfigNow((message) => setMilestoneErr(message));
                           }}
                           onKeyDown={(e) => {
                             if (e.key !== "Enter") return;
                             e.preventDefault();
-                            if (autosaveTimerRef.current)
-                              clearTimeout(autosaveTimerRef.current);
-                            autosaveTimerRef.current = null;
-                            void persistDraft("manual");
+                            void flushConfigNow((message) => setMilestoneErr(message));
                           }}
                           className="timeField"
                         />
@@ -1945,8 +2028,11 @@ function App() {
                           max={59}
                           step={1}
                           onChange={(e) => {
+                            if (!selected) return;
+                            const streamerName = selected;
                             const raw = e.target.value;
-                            const cur = draft[milestone]?.thresholdSec;
+                            const currentDraft = draftRef.current;
+                            const cur = currentDraft[milestone]?.thresholdSec;
                             const curMm =
                               typeof cur === "number"
                                 ? Math.floor(cur / 60)
@@ -1961,21 +2047,25 @@ function App() {
                                 ? undefined
                                 : curMm * 60 + (nextSs ?? 0);
 
-                            setDraft((d) => ({
-                              ...d,
+                            const nextDraft = {
+                              ...currentDraft,
                               [milestone]: {
-                                ...d[milestone],
+                                ...currentDraft[milestone],
                                 thresholdSec: nextSec,
                               },
-                            }));
+                            };
+                            updateMilestoneDraft(streamerName, nextDraft, {
+                              save: "debounced",
+                              debounceMs: 700,
+                            });
+                          }}
+                          onBlur={() => {
+                            void flushConfigNow((message) => setMilestoneErr(message));
                           }}
                           onKeyDown={(e) => {
                             if (e.key !== "Enter") return;
                             e.preventDefault();
-                            if (autosaveTimerRef.current)
-                              clearTimeout(autosaveTimerRef.current);
-                            autosaveTimerRef.current = null;
-                            void persistDraft("manual");
+                            void flushConfigNow((message) => setMilestoneErr(message));
                           }}
                           className="timeField"
                         />
@@ -1987,11 +2077,21 @@ function App() {
                           type="checkbox"
                           checked={enabled}
                           onChange={(e) => {
+                            if (!selected) return;
+                            const streamerName = selected;
                             const on = e.target.checked;
-                            setDraft((d) => ({
-                              ...d,
-                              [milestone]: { ...d[milestone], enabled: on },
-                            }));
+                            const currentDraft = draftRef.current;
+                            const nextDraft = {
+                              ...currentDraft,
+                              [milestone]: {
+                                ...currentDraft[milestone],
+                                enabled: on,
+                              },
+                            };
+                            updateMilestoneDraft(streamerName, nextDraft, {
+                              save: "immediate",
+                              onError: (message) => setMilestoneErr(message),
+                            });
                           }}
                         />
                       </label>
@@ -2001,24 +2101,25 @@ function App() {
               })}
             </div>
 
+            {milestoneErr ? <div className="configError">{milestoneErr}</div> : null}
+
             <div className="milestonePanelFooter">
               <button
                 onClick={() => {
-                  if (!selected) return;
-                  setDraft(getMilestonesForStreamer(selected)); // revert
+                  setSelected(null);
                 }}
                 className="modalBtn"
               >
-                Cancel
+                Close
               </button>
 
               <button
-                disabled={!cfg || !selected || saving || milestoneSaved}
+                disabled={!cfg || !selected || milestoneSaved}
                 onClick={async () => {
-                  if (autosaveTimerRef.current)
-                    clearTimeout(autosaveTimerRef.current);
-                  autosaveTimerRef.current = null;
-                  await persistDraft("manual");
+                  const ok = await flushConfigNow((message) =>
+                    setMilestoneErr(message)
+                  );
+                  if (!ok) return;
                   if (milestoneSavedTimerRef.current) {
                     window.clearTimeout(milestoneSavedTimerRef.current);
                   }
@@ -2050,8 +2151,6 @@ function App() {
                     </svg>
                     Saved
                   </>
-                ) : saving ? (
-                  "Saving…"
                 ) : (
                   "Save"
                 )}
@@ -2667,15 +2766,17 @@ function App() {
                 >
                   Quiet Hours
                 </button>
-                <button
-                  className="settingsMenuBtn"
-                  onClick={() => {
-                    setShowSettings(false);
-                    setShowAgentSettings(true);
-                  }}
-                >
-                  Background Monitoring
-                </button>
+                {desktopApp ? (
+                  <button
+                    className="settingsMenuBtn"
+                    onClick={() => {
+                      setShowSettings(false);
+                      setShowAgentSettings(true);
+                    }}
+                  >
+                    Background Monitoring
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
@@ -2836,17 +2937,20 @@ function App() {
                     checked={agentAutoUpdateEnabled}
                     onChange={(e) => {
                       const next = e.target.checked;
-                      if (!cfg) return;
-                      const updated = structuredClone(cfg);
-                      updated.agent = {
-                        ...(updated.agent || {}),
-                        autoUpdate: next,
-                        backgroundMonitoring: backgroundMonitoringEnabled,
-                      };
-                      applyConfig(updated);
                       setErr(null);
-                      void putConfig(stripLegacyForsenConfig(updated)).catch((e) =>
-                        setErr(e?.message ?? String(e))
+                      updateConfig(
+                        (updated) => {
+                          updated.agent = {
+                            ...(updated.agent || {}),
+                            autoUpdate: next,
+                            backgroundMonitoring: backgroundMonitoringEnabled,
+                          };
+                          return updated;
+                        },
+                        {
+                          save: "immediate",
+                          onError: (message) => setErr(message),
+                        }
                       );
                     }}
                   />
@@ -2928,7 +3032,11 @@ function App() {
                             type="button"
                             className="qhConfirmYes"
                             onClick={() => {
-                              setQuietDraft((d) => d.filter((_, i) => i !== idx));
+                              const currentDraft = quietDraftRef.current;
+                              queueQuietHoursDraft(
+                                currentDraft.filter((_, i) => i !== idx),
+                                "immediate"
+                              );
                               setConfirmRemoveQH(null);
                             }}
                           >
@@ -2968,11 +3076,22 @@ function App() {
                           aria-label={`quiet-${idx}-start-hour`}
                           onChange={(e) => {
                             const v = e.target.value;
-                            setQuietDraft((d) => {
-                              const next = d.slice();
-                              next[idx] = { ...next[idx], start: { ...next[idx].start, hh: v } };
-                              return next;
-                            });
+                            const currentDraft = quietDraftRef.current;
+                            const next = currentDraft.slice();
+                            next[idx] = {
+                              ...next[idx],
+                              start: { ...next[idx].start, hh: v },
+                            };
+                            queueQuietHoursDraft(next, "debounced");
+                          }}
+                          onBlur={() => {
+                            const validation = validateQuietDraft(quietDraftRef.current);
+                            if (validation.ok) {
+                              void flushConfigNow((message) => {
+                                setQuietErr(message);
+                                restoreQuietDraftFromConfirmed();
+                              });
+                            }
                           }}
                         />
                         <span className="qhTimeSep">:</span>
@@ -2986,11 +3105,22 @@ function App() {
                           aria-label={`quiet-${idx}-start-minute`}
                           onChange={(e) => {
                             const v = e.target.value;
-                            setQuietDraft((d) => {
-                              const next = d.slice();
-                              next[idx] = { ...next[idx], start: { ...next[idx].start, mm: v } };
-                              return next;
-                            });
+                            const currentDraft = quietDraftRef.current;
+                            const next = currentDraft.slice();
+                            next[idx] = {
+                              ...next[idx],
+                              start: { ...next[idx].start, mm: v },
+                            };
+                            queueQuietHoursDraft(next, "debounced");
+                          }}
+                          onBlur={() => {
+                            const validation = validateQuietDraft(quietDraftRef.current);
+                            if (validation.ok) {
+                              void flushConfigNow((message) => {
+                                setQuietErr(message);
+                                restoreQuietDraftFromConfirmed();
+                              });
+                            }
                           }}
                         />
                         <select
@@ -2999,11 +3129,22 @@ function App() {
                           aria-label={`quiet-${idx}-start-ampm`}
                           onChange={(e) => {
                             const v = e.target.value as AmPm;
-                            setQuietDraft((d) => {
-                              const next = d.slice();
-                              next[idx] = { ...next[idx], start: { ...next[idx].start, ampm: v } };
-                              return next;
-                            });
+                            const currentDraft = quietDraftRef.current;
+                            const next = currentDraft.slice();
+                            next[idx] = {
+                              ...next[idx],
+                              start: { ...next[idx].start, ampm: v },
+                            };
+                            queueQuietHoursDraft(next, "debounced");
+                          }}
+                          onBlur={() => {
+                            const validation = validateQuietDraft(quietDraftRef.current);
+                            if (validation.ok) {
+                              void flushConfigNow((message) => {
+                                setQuietErr(message);
+                                restoreQuietDraftFromConfirmed();
+                              });
+                            }
                           }}
                         >
                           <option value="AM">AM</option>
@@ -3022,11 +3163,22 @@ function App() {
                           aria-label={`quiet-${idx}-end-hour`}
                           onChange={(e) => {
                             const v = e.target.value;
-                            setQuietDraft((d) => {
-                              const next = d.slice();
-                              next[idx] = { ...next[idx], end: { ...next[idx].end, hh: v } };
-                              return next;
-                            });
+                            const currentDraft = quietDraftRef.current;
+                            const next = currentDraft.slice();
+                            next[idx] = {
+                              ...next[idx],
+                              end: { ...next[idx].end, hh: v },
+                            };
+                            queueQuietHoursDraft(next, "debounced");
+                          }}
+                          onBlur={() => {
+                            const validation = validateQuietDraft(quietDraftRef.current);
+                            if (validation.ok) {
+                              void flushConfigNow((message) => {
+                                setQuietErr(message);
+                                restoreQuietDraftFromConfirmed();
+                              });
+                            }
                           }}
                         />
                         <span className="qhTimeSep">:</span>
@@ -3040,11 +3192,22 @@ function App() {
                           aria-label={`quiet-${idx}-end-minute`}
                           onChange={(e) => {
                             const v = e.target.value;
-                            setQuietDraft((d) => {
-                              const next = d.slice();
-                              next[idx] = { ...next[idx], end: { ...next[idx].end, mm: v } };
-                              return next;
-                            });
+                            const currentDraft = quietDraftRef.current;
+                            const next = currentDraft.slice();
+                            next[idx] = {
+                              ...next[idx],
+                              end: { ...next[idx].end, mm: v },
+                            };
+                            queueQuietHoursDraft(next, "debounced");
+                          }}
+                          onBlur={() => {
+                            const validation = validateQuietDraft(quietDraftRef.current);
+                            if (validation.ok) {
+                              void flushConfigNow((message) => {
+                                setQuietErr(message);
+                                restoreQuietDraftFromConfirmed();
+                              });
+                            }
                           }}
                         />
                         <select
@@ -3053,11 +3216,22 @@ function App() {
                           aria-label={`quiet-${idx}-end-ampm`}
                           onChange={(e) => {
                             const v = e.target.value as AmPm;
-                            setQuietDraft((d) => {
-                              const next = d.slice();
-                              next[idx] = { ...next[idx], end: { ...next[idx].end, ampm: v } };
-                              return next;
-                            });
+                            const currentDraft = quietDraftRef.current;
+                            const next = currentDraft.slice();
+                            next[idx] = {
+                              ...next[idx],
+                              end: { ...next[idx].end, ampm: v },
+                            };
+                            queueQuietHoursDraft(next, "debounced");
+                          }}
+                          onBlur={() => {
+                            const validation = validateQuietDraft(quietDraftRef.current);
+                            if (validation.ok) {
+                              void flushConfigNow((message) => {
+                                setQuietErr(message);
+                                restoreQuietDraftFromConfirmed();
+                              });
+                            }
                           }}
                         >
                           <option value="AM">AM</option>
@@ -3075,7 +3249,11 @@ function App() {
                       className="qhAddPeriod"
                       disabled={quietSaving}
                       onClick={() => {
-                        setQuietDraft((d) => [...d, defaultQuietSpan()]);
+                        const currentDraft = quietDraftRef.current;
+                        queueQuietHoursDraft(
+                          [...currentDraft, defaultQuietSpan()],
+                          "immediate"
+                        );
                       }}
                     >
                       + Add quiet period
@@ -3101,31 +3279,25 @@ function App() {
                       disabled={quietSaving || quietSaved}
                       className={`qhSave${quietSaved ? " saved" : ""}`}
                       onClick={async () => {
-                        if (!cfg) return;
-                        const v = validateQuietDraft(quietDraft);
+                        const v = validateQuietDraft(quietDraftRef.current);
                         if (!v.ok) {
                           setQuietErr(v.error || "Invalid quiet hours.");
                           return;
                         }
-                        setQuietSaving(true);
                         setQuietErr(null);
-                        try {
-                          const next = structuredClone(cfg);
-                          next.quietHours = v.ranges;
-                          const saved = await putConfig(
-                            stripLegacyForsenConfig(next)
-                          );
-                          applyConfig(saved);
-                          setQuietSaving(false);
-                          setQuietSaved(true);
-                          window.setTimeout(() => {
-                            setShowQuietHours(false);
-                            setQuietSaved(false);
-                          }, 900);
-                        } catch (e: any) {
-                          setQuietErr(e?.message ?? String(e));
-                          setQuietSaving(false);
+                        const ok = await flushConfigNow((message) => {
+                          setQuietErr(message);
+                          restoreQuietDraftFromConfirmed();
+                        });
+                        if (!ok) return;
+                        if (quietSavedTimerRef.current) {
+                          window.clearTimeout(quietSavedTimerRef.current);
                         }
+                        setQuietSaved(true);
+                        quietSavedTimerRef.current = window.setTimeout(() => {
+                          setQuietSaved(false);
+                          quietSavedTimerRef.current = null;
+                        }, 1200);
                       }}
                     >
                       {quietSaved ? (
@@ -3146,8 +3318,6 @@ function App() {
                           </svg>
                           Saved
                         </>
-                      ) : quietSaving ? (
-                        "Saving…"
                       ) : (
                         "Save"
                       )}

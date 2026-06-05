@@ -9,7 +9,6 @@
     "lint": "eslint .",
     "test": "vitest run --pool=threads --poolOptions.threads.singleThread",
     "preview": "vite preview",
-    "test:layout": "PW_PORT=4174 playwright test --grep @layout --project=chromium --project=firefox",
     "test:visual": "PW_PORT=4174 playwright test --grep @visual --project=chromium",
     "test:visual:update": "PW_PORT=4174 playwright test --grep @visual --project=chromium --update-snapshots"
   },
