@@ -2224,6 +2224,77 @@ a.tag:hover{
 }
 
 @media (max-width: 720px){
+  .frame{
+    box-sizing: border-box;
+    padding: 18px 14px 64px;
+  }
+
+  .titleRow{
+    padding-top: 44px;
+  }
+
+  .brandRow,
+  .brandText,
+  .titleLine{
+    width: 100%;
+    min-width: 0;
+  }
+
+  .titleLine{
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 0;
+  }
+
+  .appTitle{
+    width: 100%;
+    max-width: 100%;
+    font-size: clamp(24px, 8vw, 30px);
+    line-height: 1.12;
+  }
+
+  .settingsGear{
+    top: 14px;
+    right: 14px;
+    width: 38px;
+    height: 38px;
+  }
+
+  .utilityRow{
+    width: 100%;
+    justify-content: center;
+  }
+
+  .utilityCard{
+    flex: 1 1 150px;
+  }
+
+  .downloadHub{
+    width: 100%;
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .downloadHubHeader{
+    text-align: center;
+  }
+
+  .downloadHubActions{
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .downloadHubActions .installButton{
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
+  }
+
   .onboardingGrid,
   .helpGrid{
     grid-template-columns: 1fr;
