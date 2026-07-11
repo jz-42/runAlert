@@ -210,6 +210,35 @@ describe("App", () => {
     );
   });
 
+  it("describes the signed Mac install flow without Gatekeeper bypass advice", async () => {
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+    fireEvent.click(screen.getByRole("button", { name: "Download Mac Beta" }));
+
+    expect(screen.getByText(/signed.*notarized by Apple/i)).toBeTruthy();
+    expect(screen.queryByText(/preferred AI/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Open runAlert")).toBeTruthy();
+    expect(screen.queryByText(/Open Anyway/i)).toBeNull();
+    expect(screen.queryByText(/unsigned by Apple/i)).toBeNull();
+  });
+
   it("lets the install walkthrough switch to the Windows path", async () => {
     mockFetchSequence([
       {

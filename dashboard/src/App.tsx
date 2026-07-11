@@ -92,14 +92,13 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       ),
       details: [
         "The download comes from runalert.app and the public GitHub release for jz-42/runAlert.",
+        "The release is signed with an Apple Developer ID and notarized by Apple.",
         "No account required.",
       ],
       note: (
         <>
-          <span className="installGuideNoteLabel">
-            ⚠️ Important Security Note:
-          </span>{" "}
-          To verify this app is safe, send the{" "}
+          <span className="installGuideNoteLabel">Verify your download:</span>{" "}
+          You can review the{" "}
           <a
             className="installGuideInlineLink"
             href={GITHUB_REPO_URL}
@@ -108,19 +107,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
           >
             public source code
           </a>{" "}
-          link to your preferred AI and upload your{" "}
-          <span className="installGuideEmphasisDownload">download file</span> to
-          scan for anything malicious. For a manual check, you can also review
-          the{" "}
-          <a
-            className="installGuideInlineLink"
-            href={GITHUB_REPO_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            public source code
-          </a>{" "}
-          yourself and verify the{" "}
+          and verify the{" "}
           <a
             className="installGuideInlineLink installGuideInlineLink--checksum"
             href={GITHUB_BETA_RELEASE_URL}
@@ -144,22 +131,15 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
     },
     {
       eyebrow: "Step 3",
-      title: "Try opening runAlert",
+      title: "Open runAlert",
       body:
-        "Open runAlert from Applications. macOS may say Apple cannot verify the app.",
+        "Open runAlert from Applications, then allow notifications when macOS asks.",
       details: [
-        "That warning is expected for this beta because the app is unsigned by Apple.",
+        "runAlert keeps monitoring in the menu bar after you close its window.",
+        "If macOS blocks the signed app, confirm you downloaded it from runalert.app and report the release instead of bypassing the warning.",
       ],
-      imageSrc: "/install-guide/step-3-gatekeeper-warning.png",
-      imageAlt: "macOS gatekeeper warning shown when first opening runAlert",
-    },
-    {
-      eyebrow: "Step 4",
-      title: "Click Open Anyway",
-      body:
-        "Given that you've verified security yourself, feel free to override this. If your Mac blocks it, go to Settings → Privacy & Security and click Open Anyway. Then open the app again.",
-      imageSrc: "/install-guide/step-4-open-anyway.png",
-      imageAlt: "macOS Privacy & Security page showing the Open Anyway button for runAlert",
+      imageSrc: "/install-guide/step-5-notification-settings.png",
+      imageAlt: "macOS notification settings for runAlert",
     },
   ],
   windows: [
