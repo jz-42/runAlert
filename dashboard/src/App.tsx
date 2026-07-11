@@ -1612,6 +1612,10 @@ function App() {
       .join(" • ");
   }
 
+  // Past this, "Last update • Nd ago" reads like a bug — show a calmer
+  // "No recent runs" instead.
+  const STALE_RUN_SEC = 7 * 24 * 60 * 60;
+
   function subtitleFor(name: string): string | null {
     const s = statusByName[name];
     const badge = getBadgeData(name);
@@ -1620,7 +1624,9 @@ function App() {
 
     const nowSec = Math.floor(Date.now() / 1000);
     if (typeof s.lastUpdatedSec === "number") {
-      const ago = formatAgo(Math.max(0, nowSec - s.lastUpdatedSec));
+      const agoSec = Math.max(0, nowSec - s.lastUpdatedSec);
+      if (agoSec >= STALE_RUN_SEC) return "No recent runs";
+      const ago = formatAgo(agoSec);
       return ago ? `Last update • ${ago}` : null;
     }
     return null;
@@ -2276,7 +2282,11 @@ function App() {
                 ) : null}
               </a>
               <a
-                className="milestoneSubtitle milestoneLink"
+                className={`milestoneSubtitle milestoneLink${
+                  subtitleFor(name) === "No recent runs"
+                    ? " milestoneSubtitle--stale"
+                    : ""
+                }`}
                 href={getPacemanStatsUrl(name) ?? undefined}
                 target="_blank"
                 rel="noreferrer"

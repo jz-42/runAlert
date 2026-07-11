@@ -450,6 +450,46 @@ describe("App", () => {
     ).toBeNull();
   });
 
+  // Test: long-inactive streamers show a calm empty state, not "58d ago"
+  it("shows No recent runs for streamers stale beyond a week", async () => {
+    const staleSec = Math.floor(Date.now() / 1000) - 58 * 24 * 60 * 60;
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/config")) {
+        return makeJsonResponse({
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+        });
+      }
+      if (u.includes("/status")) {
+        return makeJsonResponse({
+          ok: true,
+          statuses: {
+            xQcOW: {
+              runId: 1,
+              isLive: false,
+              isActive: false,
+              lastUpdatedSec: staleSec,
+              lastMilestone: "bastion",
+              lastMilestoneMs: 300000,
+            },
+          },
+        });
+      }
+      return makeJsonResponse({ ok: true, profiles: {}, statuses: {} });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    expect(await screen.findByText("No recent runs")).toBeTruthy();
+    expect(screen.queryByText(/Last update • \d+d/)).toBeNull();
+  });
+
   // Test: Escape closes open surfaces one layer at a time
   it("closes settings and modals with the Escape key", async () => {
     // Skip onboarding so Escape targets the surfaces under test; restored

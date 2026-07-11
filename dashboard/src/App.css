@@ -788,6 +788,13 @@ a.tag:hover{
   white-space: nowrap;
 }
 
+.milestoneSubtitle--stale{
+  color: rgba(220, 224, 234, 0.22);
+  background: transparent;
+  border-color: rgba(255,255,255,0.03);
+  font-style: italic;
+}
+
 .milestoneLink{
   text-decoration: none;
 }
