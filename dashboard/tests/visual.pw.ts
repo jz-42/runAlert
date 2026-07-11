@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 function mockDashboardApi(page: import("@playwright/test").Page) {
   const streamers = Array.from({ length: 13 }, (_, i) => String(i + 1));
 
-  page.route("**/config", async (route) => {
+  page.route(/\/config(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -97,6 +97,10 @@ test.describe("dashboard visual layout", () => {
     test(`${name} layout snapshot @visual`, async ({ page }) => {
       await page.setViewportSize({ width, height });
       mockDashboardApi(page);
+      await page.context().grantPermissions(["notifications"]);
+      await page.addInitScript(() => {
+        window.localStorage.setItem("runalert-onboarding-dismissed", "true");
+      });
 
       await page.goto("/", { waitUntil: "networkidle" });
       await expect(page.locator(".grid")).toBeVisible();
