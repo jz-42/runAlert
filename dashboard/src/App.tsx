@@ -1055,6 +1055,39 @@ function App() {
     setShowOnboarding(true);
   }, []);
 
+  // Escape closes the topmost open surface, mirroring click-outside.
+  useEffect(() => {
+    function onEscape(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (showCopyFallback) {
+        setShowCopyFallback(false);
+      } else if (pendingRemove) {
+        setPendingRemove(null);
+      } else if (showAddStreamer) {
+        setShowAddStreamer(false);
+        setAddStreamerErr(null);
+      } else if (showQuietHours) {
+        if (quietSaving) return;
+        setShowQuietHours(false);
+        setQuietErr(null);
+      } else if (showNotifications) {
+        setShowNotifications(false);
+      } else if (showAgentSettings) {
+        setShowAgentSettings(false);
+      } else if (showInstallDetails) {
+        setShowInstallDetails(false);
+      } else if (showOnboarding) {
+        dismissOnboarding();
+      } else if (showSettings) {
+        setShowSettings(false);
+      } else if (selected) {
+        setSelected(null);
+      }
+    }
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  });
+
   useEffect(() => {
     if (
       typeof Notification !== "undefined" &&

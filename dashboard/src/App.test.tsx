@@ -450,6 +450,61 @@ describe("App", () => {
     ).toBeNull();
   });
 
+  // Test: Escape closes open surfaces one layer at a time
+  it("closes settings and modals with the Escape key", async () => {
+    // Skip onboarding so Escape targets the surfaces under test; restored
+    // in the finally block because other tests expect a fresh first run.
+    window.localStorage.setItem("runalert-onboarding-dismissed", "true");
+    try {
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    // Settings panel: open, then Escape closes it.
+    fireEvent.click(screen.getByLabelText("Open settings"));
+    await screen.findByRole("button", { name: "Notifications" });
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Notifications" })).toBeNull();
+    });
+
+    // Sub-modal closes before the settings panel underneath disappears.
+    fireEvent.click(screen.getByLabelText("Open settings"));
+    fireEvent.click(await screen.findByRole("button", { name: "Quiet Hours" }));
+    await screen.findByLabelText("Quiet hours");
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Quiet hours")).toBeNull();
+    });
+
+    // Add-streamer modal: Escape dismisses it too.
+    const addBtn = document.querySelector(
+      "button.avatarBtn.add"
+    ) as HTMLButtonElement | null;
+    expect(addBtn).toBeTruthy();
+    fireEvent.click(addBtn!);
+    await screen.findByRole("dialog", { name: /add streamer/i });
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /add streamer/i })).toBeNull();
+    });
+    } finally {
+      window.localStorage.removeItem("runalert-onboarding-dismissed");
+    }
+  });
+
   it("shows macOS notification guidance inside desktop notification settings", async () => {
     (window as any).runAlertDesktop = { platform: "darwin" };
     mockFetchSequence([
