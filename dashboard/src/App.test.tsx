@@ -1070,9 +1070,11 @@ describe("App", () => {
     };
     const updatedCfg = { ...initialCfg, streamers: ["xQcOW", "forsen"] };
 
-    // GET /config (initial), PUT /config, then GET /config (canonical)
+    // GET /config (initial), GET /paceman/milestones (validation),
+    // PUT /config, then GET /config (canonical)
     mockFetchSequence([
       { ok: true, json: initialCfg },
+      { ok: true, json: { ok: true, runId: 12345, milestones: [] } },
       { ok: true, json: { ok: true } },
       { ok: true, json: updatedCfg },
     ]);
@@ -1094,7 +1096,8 @@ describe("App", () => {
     expect(await screen.findByText("forsen")).toBeTruthy();
   });
 
-  it("rolls back add streamer optimistic UI on save failure", async () => {
+  // Test: rejects streamer names that don't exist on Paceman
+  it("rejects add streamer when the name is not found on Paceman", async () => {
     const initialCfg = {
       streamers: ["xQcOW"],
       clock: "IGT",
@@ -1110,8 +1113,58 @@ describe("App", () => {
       if (u.includes("/config") && method === "GET") {
         return makeJsonResponse(initialCfg);
       }
+      if (u.includes("/paceman/milestones")) {
+        return makeJsonResponse({ ok: true, runId: null, milestones: [] });
+      }
+      return makeJsonResponse({ ok: true, profiles: {}, statuses: {} });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    const addBtn = document.querySelector(
+      "button.avatarBtn.add"
+    ) as HTMLButtonElement | null;
+    expect(addBtn).toBeTruthy();
+    fireEvent.click(addBtn!);
+
+    const dialog = await screen.findByRole("dialog", { name: /add streamer/i });
+    const input = within(dialog).getByPlaceholderText("e.g. xQc");
+    fireEvent.change(input, { target: { value: "definitely_not_real" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+
+    // Modal stays open with an inline error; nothing is saved.
+    expect(
+      await within(dialog).findByText(/wasn't found on Paceman/)
+    ).toBeTruthy();
+    const putCalls = (globalThis.fetch as any).mock.calls.filter(
+      ([, init]: any[]) =>
+        String(init?.method || "GET").toUpperCase() === "PUT"
+    );
+    expect(putCalls.length).toBe(0);
+    expect(screen.queryByText("definitely_not_real")).toBeNull();
+  });
+
+  it("rolls back add streamer optimistic UI on save failure", async () => {
+    const initialCfg = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+
+    // Defer the PUT so the optimistic tile is observable before rollback.
+    const deferredPut = createDeferredResponse();
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: any) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(initialCfg);
+      }
       if (u.includes("/config") && method === "PUT") {
-        return makeJsonResponse({ ok: false }, false, 500);
+        return deferredPut.promise;
       }
       return makeJsonResponse({ ok: true, profiles: {}, statuses: {} });
     });
@@ -1130,7 +1183,9 @@ describe("App", () => {
     fireEvent.change(input, { target: { value: "forsen" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 
-    expect(screen.getByText("forsen")).toBeTruthy();
+    // Optimistic tile appears once the (async) Paceman check passes.
+    expect(await screen.findByText("forsen")).toBeTruthy();
+    deferredPut.resolve(makeJsonResponse({ ok: false }, false, 500));
 
     await waitFor(() => {
       expect(screen.queryByText("forsen")).toBeNull();

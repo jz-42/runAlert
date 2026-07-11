@@ -238,13 +238,6 @@ a.tag:hover{
   top: -2px;
 }
 
-.metaWarn{
-  color: rgba(255, 140, 140, 0.70);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
 .pageVersion{
   position: fixed;
   right: clamp(18px, 2.2vw, 28px);

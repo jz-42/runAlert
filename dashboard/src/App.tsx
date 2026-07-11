@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   API_BASE,
   getConfig,
+  getPacemanMilestones,
   getProfiles,
   getStatuses,
   getTwitchStatuses,
@@ -322,6 +323,7 @@ function App() {
   const [installGuideStep, setInstallGuideStep] = useState(0);
   const [addStreamerName, setAddStreamerName] = useState("");
   const [addStreamerErr, setAddStreamerErr] = useState<string | null>(null);
+  const [addStreamerBusy, setAddStreamerBusy] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
   const [showCopyFallback, setShowCopyFallback] = useState(false);
   const [copyFallbackCommand, setCopyFallbackCommand] = useState("");
@@ -905,6 +907,7 @@ function App() {
   }
 
   async function submitAddStreamer() {
+    if (addStreamerBusy) return;
     setAddStreamerErr(null);
     const name = addStreamerName.trim();
     if (!name) {
@@ -928,6 +931,27 @@ function App() {
     if (exists) {
       setAddStreamerErr(`Streamer already exists: ${name}`);
       return;
+    }
+
+    // Verify the name exists on Paceman before saving, so a typo doesn't
+    // leave a permanently silent tile. runId === null is the server's
+    // explicit "no runs found"; an unexpected shape fails open.
+    setAddStreamerBusy(true);
+    try {
+      const check = await getPacemanMilestones(name);
+      if (check?.runId === null) {
+        setAddStreamerErr(
+          `"${name}" wasn't found on Paceman. It's their Paceman player name, which isn't always their Twitch handle.`
+        );
+        return;
+      }
+    } catch {
+      setAddStreamerErr(
+        "Couldn't reach Paceman to verify the name. Try again in a moment."
+      );
+      return;
+    } finally {
+      setAddStreamerBusy(false);
     }
 
     setErr(null);
@@ -1593,10 +1617,10 @@ function App() {
                       href={GITHUB_REPO_URL}
                       target="_blank"
                       rel="noopener noreferrer"
+                      title="Beta — expect possible bugs and occasional notification delays."
                     >
                       {APP_CHANNEL}
                     </a>
-                    <span className="metaWarn">⚠ Possible bugs</span>
                   </div>
                 </div>
                 <div className="utilityRow" data-testid="header-utilityRow">
@@ -3414,9 +3438,10 @@ function App() {
                 <button
                   type="button"
                   className="qhSave"
+                  disabled={addStreamerBusy}
                   onClick={() => void submitAddStreamer()}
                 >
-                  Add
+                  {addStreamerBusy ? "Checking…" : "Add"}
                 </button>
               </div>
             </div>
