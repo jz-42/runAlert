@@ -21,6 +21,7 @@ import {
   fireEvent,
   waitFor,
   within,
+  act,
 } from "@testing-library/react";
 
 import { trackEvent } from "./analytics";
@@ -1267,6 +1268,116 @@ describe("App", () => {
     );
     expect(putCalls.length).toBe(0);
     expect(screen.queryByText("definitely_not_real")).toBeNull();
+  });
+
+  it("does not add a streamer when validation finishes after Cancel", async () => {
+    const initialCfg = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+    const validation = createDeferredResponse();
+    let putCount = 0;
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/paceman/milestones")) return validation.promise;
+      if (u.includes("/config") && method === "PUT") {
+        putCount += 1;
+        return makeJsonResponse({ ok: true });
+      }
+      if (u.includes("/config")) return makeJsonResponse(initialCfg);
+      if (u.includes("/profiles")) {
+        return makeJsonResponse({ ok: true, profiles: {} });
+      }
+      return makeJsonResponse({ ok: true, statuses: {} });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+    fireEvent.click(document.querySelector("button.avatarBtn.add")!);
+    const dialog = await screen.findByRole("dialog", { name: /add streamer/i });
+    fireEvent.change(within(dialog).getByPlaceholderText("e.g. xQc"), {
+      target: { value: "forsen" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    await within(dialog).findByRole("button", { name: "Checking…" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    await act(async () => {
+      validation.resolve(
+        makeJsonResponse({ ok: true, runId: 12345, milestones: [] })
+      );
+      await validation.promise;
+    });
+
+    expect(putCount).toBe(0);
+    expect(screen.queryByText("forsen")).toBeNull();
+  });
+
+  it("keeps a reopened add dialog when an older validation finishes", async () => {
+    const initialCfg = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+    const validation = createDeferredResponse();
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/paceman/milestones")) return validation.promise;
+      if (u.includes("/config") && method === "PUT") {
+        return makeJsonResponse({ ok: true });
+      }
+      if (u.includes("/config")) return makeJsonResponse(initialCfg);
+      if (u.includes("/profiles")) {
+        return makeJsonResponse({ ok: true, profiles: {} });
+      }
+      return makeJsonResponse({ ok: true, statuses: {} });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+    fireEvent.click(document.querySelector("button.avatarBtn.add")!);
+    const firstDialog = await screen.findByRole("dialog", {
+      name: /add streamer/i,
+    });
+    fireEvent.change(within(firstDialog).getByPlaceholderText("e.g. xQc"), {
+      target: { value: "forsen" },
+    });
+    fireEvent.click(within(firstDialog).getByRole("button", { name: "Add" }));
+    await within(firstDialog).findByRole("button", { name: "Checking…" });
+    fireEvent.click(
+      within(firstDialog).getByRole("button", { name: "Close add streamer" })
+    );
+
+    fireEvent.click(document.querySelector("button.avatarBtn.add")!);
+    const reopenedDialog = await screen.findByRole("dialog", {
+      name: /add streamer/i,
+    });
+    const reopenedInput = within(reopenedDialog).getByPlaceholderText("e.g. xQc");
+    fireEvent.change(reopenedInput, { target: { value: "couriway" } });
+
+    await act(async () => {
+      validation.resolve(
+        makeJsonResponse({ ok: true, runId: 12345, milestones: [] })
+      );
+      await validation.promise;
+    });
+
+    expect(
+      screen.getByRole("dialog", { name: /add streamer/i })
+    ).toBeTruthy();
+    expect((reopenedInput as HTMLInputElement).value).toBe("couriway");
+    expect(screen.queryByText("forsen")).toBeNull();
   });
 
   it("rolls back add streamer optimistic UI on save failure", async () => {

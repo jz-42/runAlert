@@ -412,6 +412,7 @@ function App() {
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const suppressOpenRef = useRef(false);
+  const addStreamerSubmissionRef = useRef(0);
   const browserAlertDedupeRef = useRef<
     Record<string, { runId: number | null; milestones: Record<string, boolean> }>
   >({});
@@ -881,9 +882,18 @@ function App() {
       );
       return;
     }
+    addStreamerSubmissionRef.current += 1;
+    setAddStreamerBusy(false);
     setAddStreamerErr(null);
     setAddStreamerName("");
     setShowAddStreamer(true);
+  }
+
+  function closeAddStreamerPrompt() {
+    addStreamerSubmissionRef.current += 1;
+    setAddStreamerBusy(false);
+    setShowAddStreamer(false);
+    setAddStreamerErr(null);
   }
 
   async function submitAddStreamer() {
@@ -916,9 +926,12 @@ function App() {
     // Verify the name exists on Paceman before saving, so a typo doesn't
     // leave a permanently silent tile. runId === null is the server's
     // explicit "no runs found"; an unexpected shape fails open.
+    const submissionId = addStreamerSubmissionRef.current + 1;
+    addStreamerSubmissionRef.current = submissionId;
     setAddStreamerBusy(true);
     try {
       const check = await getPacemanMilestones(name);
+      if (addStreamerSubmissionRef.current !== submissionId) return;
       if (check?.runId === null) {
         setAddStreamerErr(
           `"${name}" wasn't found on Paceman. It's their Paceman player name, which isn't always their Twitch handle.`
@@ -926,18 +939,23 @@ function App() {
         return;
       }
     } catch {
+      if (addStreamerSubmissionRef.current !== submissionId) return;
       setAddStreamerErr(
         "Couldn't reach Paceman to verify the name. Try again in a moment."
       );
       return;
     } finally {
-      setAddStreamerBusy(false);
+      if (addStreamerSubmissionRef.current === submissionId) {
+        setAddStreamerBusy(false);
+      }
     }
+
+    if (addStreamerSubmissionRef.current !== submissionId) return;
 
     setErr(null);
 
     // Close modal immediately for a snappy feel
-    setShowAddStreamer(false);
+    closeAddStreamerPrompt();
 
     updateConfig(
       (optimistic) => {
@@ -1044,8 +1062,7 @@ function App() {
       } else if (pendingRemove) {
         setPendingRemove(null);
       } else if (showAddStreamer) {
-        setShowAddStreamer(false);
-        setAddStreamerErr(null);
+        closeAddStreamerPrompt();
       } else if (showQuietHours) {
         if (quietSaving) return;
         setShowQuietHours(false);
@@ -3379,10 +3396,7 @@ function App() {
         {showAddStreamer ? (
           <div
             className="qhOverlay"
-            onClick={() => {
-              setShowAddStreamer(false);
-              setAddStreamerErr(null);
-            }}
+            onClick={closeAddStreamerPrompt}
           >
             <div
               className="qhModal qhModal--xs"
@@ -3410,10 +3424,7 @@ function App() {
                   type="button"
                   className="iconBtn iconBtn--close"
                   aria-label="Close add streamer"
-                  onClick={() => {
-                    setShowAddStreamer(false);
-                    setAddStreamerErr(null);
-                  }}
+                  onClick={closeAddStreamerPrompt}
                 >
                   <svg
                     className="iconSvg close"
@@ -3451,10 +3462,7 @@ function App() {
                 <button
                   type="button"
                   className="modalBtn"
-                  onClick={() => {
-                    setShowAddStreamer(false);
-                    setAddStreamerErr(null);
-                  }}
+                  onClick={closeAddStreamerPrompt}
                 >
                   Cancel
                 </button>
