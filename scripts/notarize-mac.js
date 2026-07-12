@@ -33,6 +33,13 @@ async function notarizeMac(context) {
   const teamId = process.env.APPLE_TEAM_ID || "";
 
   if (!appleId || !appleIdPassword || !teamId) {
+    if (process.env.RUNALERT_REQUIRE_NOTARIZATION === "1") {
+      throw new Error(
+        "Apple notarization credentials are required for packaged Mac releases. " +
+          "Configure a notarytool keychain profile or APPLE_ID, " +
+          "APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID."
+      );
+    }
     console.log("[notarize] skipping: no keychain profile or Apple notarization env vars");
     return;
   }
