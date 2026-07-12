@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   API_BASE,
   getConfig,
+  getPacemanMilestones,
   getProfiles,
   getStatuses,
   getTwitchStatuses,
@@ -91,14 +92,13 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
       ),
       details: [
         "The download comes from runalert.app and the public GitHub release for jz-42/runAlert.",
+        "The release is signed with an Apple Developer ID and notarized by Apple.",
         "No account required.",
       ],
       note: (
         <>
-          <span className="installGuideNoteLabel">
-            ⚠️ Important Security Note:
-          </span>{" "}
-          To verify this app is safe, send the{" "}
+          <span className="installGuideNoteLabel">Verify your download:</span>{" "}
+          You can review the{" "}
           <a
             className="installGuideInlineLink"
             href={GITHUB_REPO_URL}
@@ -107,19 +107,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
           >
             public source code
           </a>{" "}
-          link to your preferred AI and upload your{" "}
-          <span className="installGuideEmphasisDownload">download file</span> to
-          scan for anything malicious. For a manual check, you can also review
-          the{" "}
-          <a
-            className="installGuideInlineLink"
-            href={GITHUB_REPO_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            public source code
-          </a>{" "}
-          yourself and verify the{" "}
+          and verify the{" "}
           <a
             className="installGuideInlineLink installGuideInlineLink--checksum"
             href={GITHUB_BETA_RELEASE_URL}
@@ -143,22 +131,15 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
     },
     {
       eyebrow: "Step 3",
-      title: "Try opening runAlert",
+      title: "Open runAlert",
       body:
-        "Open runAlert from Applications. macOS may say Apple cannot verify the app.",
+        "Open runAlert from Applications, then allow notifications when macOS asks.",
       details: [
-        "That warning is expected for this beta because the app is unsigned by Apple.",
+        "runAlert keeps monitoring in the menu bar after you close its window.",
+        "If macOS blocks the signed app, confirm you downloaded it from runalert.app and report the release instead of bypassing the warning.",
       ],
-      imageSrc: "/install-guide/step-3-gatekeeper-warning.png",
-      imageAlt: "macOS gatekeeper warning shown when first opening runAlert",
-    },
-    {
-      eyebrow: "Step 4",
-      title: "Click Open Anyway",
-      body:
-        "Given that you've verified security yourself, feel free to override this. If your Mac blocks it, go to Settings → Privacy & Security and click Open Anyway. Then open the app again.",
-      imageSrc: "/install-guide/step-4-open-anyway.png",
-      imageAlt: "macOS Privacy & Security page showing the Open Anyway button for runAlert",
+      imageSrc: "/install-guide/step-5-notification-settings.png",
+      imageAlt: "macOS notification settings for runAlert",
     },
   ],
   windows: [
@@ -322,6 +303,7 @@ function App() {
   const [installGuideStep, setInstallGuideStep] = useState(0);
   const [addStreamerName, setAddStreamerName] = useState("");
   const [addStreamerErr, setAddStreamerErr] = useState<string | null>(null);
+  const [addStreamerBusy, setAddStreamerBusy] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
   const [showCopyFallback, setShowCopyFallback] = useState(false);
   const [copyFallbackCommand, setCopyFallbackCommand] = useState("");
@@ -430,6 +412,7 @@ function App() {
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tileRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const suppressOpenRef = useRef(false);
+  const addStreamerSubmissionRef = useRef(0);
   const browserAlertDedupeRef = useRef<
     Record<string, { runId: number | null; milestones: Record<string, boolean> }>
   >({});
@@ -899,12 +882,22 @@ function App() {
       );
       return;
     }
+    addStreamerSubmissionRef.current += 1;
+    setAddStreamerBusy(false);
     setAddStreamerErr(null);
     setAddStreamerName("");
     setShowAddStreamer(true);
   }
 
+  function closeAddStreamerPrompt() {
+    addStreamerSubmissionRef.current += 1;
+    setAddStreamerBusy(false);
+    setShowAddStreamer(false);
+    setAddStreamerErr(null);
+  }
+
   async function submitAddStreamer() {
+    if (addStreamerBusy) return;
     setAddStreamerErr(null);
     const name = addStreamerName.trim();
     if (!name) {
@@ -930,10 +923,39 @@ function App() {
       return;
     }
 
+    // Verify the name exists on Paceman before saving, so a typo doesn't
+    // leave a permanently silent tile. runId === null is the server's
+    // explicit "no runs found"; an unexpected shape fails open.
+    const submissionId = addStreamerSubmissionRef.current + 1;
+    addStreamerSubmissionRef.current = submissionId;
+    setAddStreamerBusy(true);
+    try {
+      const check = await getPacemanMilestones(name);
+      if (addStreamerSubmissionRef.current !== submissionId) return;
+      if (check?.runId === null) {
+        setAddStreamerErr(
+          `"${name}" wasn't found on Paceman. It's their Paceman player name, which isn't always their Twitch handle.`
+        );
+        return;
+      }
+    } catch {
+      if (addStreamerSubmissionRef.current !== submissionId) return;
+      setAddStreamerErr(
+        "Couldn't reach Paceman to verify the name. Try again in a moment."
+      );
+      return;
+    } finally {
+      if (addStreamerSubmissionRef.current === submissionId) {
+        setAddStreamerBusy(false);
+      }
+    }
+
+    if (addStreamerSubmissionRef.current !== submissionId) return;
+
     setErr(null);
 
     // Close modal immediately for a snappy feel
-    setShowAddStreamer(false);
+    closeAddStreamerPrompt();
 
     updateConfig(
       (optimistic) => {
@@ -1030,6 +1052,38 @@ function App() {
     }
     setShowOnboarding(true);
   }, []);
+
+  // Escape closes the topmost open surface, mirroring click-outside.
+  useEffect(() => {
+    function onEscape(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (showCopyFallback) {
+        setShowCopyFallback(false);
+      } else if (pendingRemove) {
+        setPendingRemove(null);
+      } else if (showAddStreamer) {
+        closeAddStreamerPrompt();
+      } else if (showQuietHours) {
+        if (quietSaving) return;
+        setShowQuietHours(false);
+        setQuietErr(null);
+      } else if (showNotifications) {
+        setShowNotifications(false);
+      } else if (showAgentSettings) {
+        setShowAgentSettings(false);
+      } else if (showInstallDetails) {
+        setShowInstallDetails(false);
+      } else if (showOnboarding) {
+        dismissOnboarding();
+      } else if (showSettings) {
+        setShowSettings(false);
+      } else if (selected) {
+        setSelected(null);
+      }
+    }
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  });
 
   useEffect(() => {
     if (
@@ -1555,6 +1609,10 @@ function App() {
       .join(" • ");
   }
 
+  // Past this, "Last update • Nd ago" reads like a bug — show a calmer
+  // "No recent runs" instead.
+  const STALE_RUN_SEC = 7 * 24 * 60 * 60;
+
   function subtitleFor(name: string): string | null {
     const s = statusByName[name];
     const badge = getBadgeData(name);
@@ -1563,7 +1621,9 @@ function App() {
 
     const nowSec = Math.floor(Date.now() / 1000);
     if (typeof s.lastUpdatedSec === "number") {
-      const ago = formatAgo(Math.max(0, nowSec - s.lastUpdatedSec));
+      const agoSec = Math.max(0, nowSec - s.lastUpdatedSec);
+      if (agoSec >= STALE_RUN_SEC) return "No recent runs";
+      const ago = formatAgo(agoSec);
       return ago ? `Last update • ${ago}` : null;
     }
     return null;
@@ -1593,10 +1653,10 @@ function App() {
                       href={GITHUB_REPO_URL}
                       target="_blank"
                       rel="noopener noreferrer"
+                      title="Beta — expect possible bugs and occasional notification delays."
                     >
                       {APP_CHANNEL}
                     </a>
-                    <span className="metaWarn">⚠ Possible bugs</span>
                   </div>
                 </div>
                 <div className="utilityRow" data-testid="header-utilityRow">
@@ -2219,7 +2279,11 @@ function App() {
                 ) : null}
               </a>
               <a
-                className="milestoneSubtitle milestoneLink"
+                className={`milestoneSubtitle milestoneLink${
+                  subtitleFor(name) === "No recent runs"
+                    ? " milestoneSubtitle--stale"
+                    : ""
+                }`}
                 href={getPacemanStatsUrl(name) ?? undefined}
                 target="_blank"
                 rel="noreferrer"
@@ -3332,10 +3396,7 @@ function App() {
         {showAddStreamer ? (
           <div
             className="qhOverlay"
-            onClick={() => {
-              setShowAddStreamer(false);
-              setAddStreamerErr(null);
-            }}
+            onClick={closeAddStreamerPrompt}
           >
             <div
               className="qhModal qhModal--xs"
@@ -3363,10 +3424,7 @@ function App() {
                   type="button"
                   className="iconBtn iconBtn--close"
                   aria-label="Close add streamer"
-                  onClick={() => {
-                    setShowAddStreamer(false);
-                    setAddStreamerErr(null);
-                  }}
+                  onClick={closeAddStreamerPrompt}
                 >
                   <svg
                     className="iconSvg close"
@@ -3404,19 +3462,17 @@ function App() {
                 <button
                   type="button"
                   className="modalBtn"
-                  onClick={() => {
-                    setShowAddStreamer(false);
-                    setAddStreamerErr(null);
-                  }}
+                  onClick={closeAddStreamerPrompt}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   className="qhSave"
+                  disabled={addStreamerBusy}
                   onClick={() => void submitAddStreamer()}
                 >
-                  Add
+                  {addStreamerBusy ? "Checking…" : "Add"}
                 </button>
               </div>
             </div>

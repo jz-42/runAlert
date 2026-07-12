@@ -21,6 +21,7 @@ import {
   fireEvent,
   waitFor,
   within,
+  act,
 } from "@testing-library/react";
 
 import { trackEvent } from "./analytics";
@@ -208,6 +209,35 @@ describe("App", () => {
     expect(screen.getByRole("link", { name: "Download DMG" }).getAttribute("href")).toBe(
       "/download/macos/dmg"
     );
+  });
+
+  it("describes the signed Mac install flow without Gatekeeper bypass advice", async () => {
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+    fireEvent.click(screen.getByRole("button", { name: "Download Mac Beta" }));
+
+    expect(screen.getByText(/signed.*notarized by Apple/i)).toBeTruthy();
+    expect(screen.queryByText(/preferred AI/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Open runAlert")).toBeTruthy();
+    expect(screen.queryByText(/Open Anyway/i)).toBeNull();
+    expect(screen.queryByText(/unsigned by Apple/i)).toBeNull();
   });
 
   it("lets the install walkthrough switch to the Windows path", async () => {
@@ -448,6 +478,101 @@ describe("App", () => {
         name: "Background Monitoring",
       })
     ).toBeNull();
+  });
+
+  // Test: long-inactive streamers show a calm empty state, not "58d ago"
+  it("shows No recent runs for streamers stale beyond a week", async () => {
+    const staleSec = Math.floor(Date.now() / 1000) - 58 * 24 * 60 * 60;
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/config")) {
+        return makeJsonResponse({
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+        });
+      }
+      if (u.includes("/status")) {
+        return makeJsonResponse({
+          ok: true,
+          statuses: {
+            xQcOW: {
+              runId: 1,
+              isLive: false,
+              isActive: false,
+              lastUpdatedSec: staleSec,
+              lastMilestone: "bastion",
+              lastMilestoneMs: 300000,
+            },
+          },
+        });
+      }
+      return makeJsonResponse({ ok: true, profiles: {}, statuses: {} });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    expect(await screen.findByText("No recent runs")).toBeTruthy();
+    expect(screen.queryByText(/Last update • \d+d/)).toBeNull();
+  });
+
+  // Test: Escape closes open surfaces one layer at a time
+  it("closes settings and modals with the Escape key", async () => {
+    // Skip onboarding so Escape targets the surfaces under test; restored
+    // in the finally block because other tests expect a fresh first run.
+    window.localStorage.setItem("runalert-onboarding-dismissed", "true");
+    try {
+    mockFetchSequence([
+      {
+        ok: true,
+        json: {
+          streamers: ["xQcOW"],
+          clock: "IGT",
+          quietHours: [],
+          defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+          profiles: {},
+        },
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    // Settings panel: open, then Escape closes it.
+    fireEvent.click(screen.getByLabelText("Open settings"));
+    await screen.findByRole("button", { name: "Notifications" });
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Notifications" })).toBeNull();
+    });
+
+    // Sub-modal closes before the settings panel underneath disappears.
+    fireEvent.click(screen.getByLabelText("Open settings"));
+    fireEvent.click(await screen.findByRole("button", { name: "Quiet Hours" }));
+    await screen.findByLabelText("Quiet hours");
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Quiet hours")).toBeNull();
+    });
+
+    // Add-streamer modal: Escape dismisses it too.
+    const addBtn = document.querySelector(
+      "button.avatarBtn.add"
+    ) as HTMLButtonElement | null;
+    expect(addBtn).toBeTruthy();
+    fireEvent.click(addBtn!);
+    await screen.findByRole("dialog", { name: /add streamer/i });
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /add streamer/i })).toBeNull();
+    });
+    } finally {
+      window.localStorage.removeItem("runalert-onboarding-dismissed");
+    }
   });
 
   it("shows macOS notification guidance inside desktop notification settings", async () => {
@@ -1070,9 +1195,11 @@ describe("App", () => {
     };
     const updatedCfg = { ...initialCfg, streamers: ["xQcOW", "forsen"] };
 
-    // GET /config (initial), PUT /config, then GET /config (canonical)
+    // GET /config (initial), GET /paceman/milestones (validation),
+    // PUT /config, then GET /config (canonical)
     mockFetchSequence([
       { ok: true, json: initialCfg },
+      { ok: true, json: { ok: true, runId: 12345, milestones: [] } },
       { ok: true, json: { ok: true } },
       { ok: true, json: updatedCfg },
     ]);
@@ -1094,7 +1221,8 @@ describe("App", () => {
     expect(await screen.findByText("forsen")).toBeTruthy();
   });
 
-  it("rolls back add streamer optimistic UI on save failure", async () => {
+  // Test: rejects streamer names that don't exist on Paceman
+  it("rejects add streamer when the name is not found on Paceman", async () => {
     const initialCfg = {
       streamers: ["xQcOW"],
       clock: "IGT",
@@ -1110,8 +1238,168 @@ describe("App", () => {
       if (u.includes("/config") && method === "GET") {
         return makeJsonResponse(initialCfg);
       }
+      if (u.includes("/paceman/milestones")) {
+        return makeJsonResponse({ ok: true, runId: null, milestones: [] });
+      }
+      return makeJsonResponse({ ok: true, profiles: {}, statuses: {} });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+
+    const addBtn = document.querySelector(
+      "button.avatarBtn.add"
+    ) as HTMLButtonElement | null;
+    expect(addBtn).toBeTruthy();
+    fireEvent.click(addBtn!);
+
+    const dialog = await screen.findByRole("dialog", { name: /add streamer/i });
+    const input = within(dialog).getByPlaceholderText("e.g. xQc");
+    fireEvent.change(input, { target: { value: "definitely_not_real" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+
+    // Modal stays open with an inline error; nothing is saved.
+    expect(
+      await within(dialog).findByText(/wasn't found on Paceman/)
+    ).toBeTruthy();
+    const putCalls = (globalThis.fetch as any).mock.calls.filter(
+      ([, init]: any[]) =>
+        String(init?.method || "GET").toUpperCase() === "PUT"
+    );
+    expect(putCalls.length).toBe(0);
+    expect(screen.queryByText("definitely_not_real")).toBeNull();
+  });
+
+  it("does not add a streamer when validation finishes after Cancel", async () => {
+    const initialCfg = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+    const validation = createDeferredResponse();
+    let putCount = 0;
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/paceman/milestones")) return validation.promise;
       if (u.includes("/config") && method === "PUT") {
-        return makeJsonResponse({ ok: false }, false, 500);
+        putCount += 1;
+        return makeJsonResponse({ ok: true });
+      }
+      if (u.includes("/config")) return makeJsonResponse(initialCfg);
+      if (u.includes("/profiles")) {
+        return makeJsonResponse({ ok: true, profiles: {} });
+      }
+      return makeJsonResponse({ ok: true, statuses: {} });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+    fireEvent.click(document.querySelector("button.avatarBtn.add")!);
+    const dialog = await screen.findByRole("dialog", { name: /add streamer/i });
+    fireEvent.change(within(dialog).getByPlaceholderText("e.g. xQc"), {
+      target: { value: "forsen" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+    await within(dialog).findByRole("button", { name: "Checking…" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    await act(async () => {
+      validation.resolve(
+        makeJsonResponse({ ok: true, runId: 12345, milestones: [] })
+      );
+      await validation.promise;
+    });
+
+    expect(putCount).toBe(0);
+    expect(screen.queryByText("forsen")).toBeNull();
+  });
+
+  it("keeps a reopened add dialog when an older validation finishes", async () => {
+    const initialCfg = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+    const validation = createDeferredResponse();
+
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/paceman/milestones")) return validation.promise;
+      if (u.includes("/config") && method === "PUT") {
+        return makeJsonResponse({ ok: true });
+      }
+      if (u.includes("/config")) return makeJsonResponse(initialCfg);
+      if (u.includes("/profiles")) {
+        return makeJsonResponse({ ok: true, profiles: {} });
+      }
+      return makeJsonResponse({ ok: true, statuses: {} });
+    });
+
+    render(<App />);
+    await screen.findByText("xQcOW");
+    fireEvent.click(document.querySelector("button.avatarBtn.add")!);
+    const firstDialog = await screen.findByRole("dialog", {
+      name: /add streamer/i,
+    });
+    fireEvent.change(within(firstDialog).getByPlaceholderText("e.g. xQc"), {
+      target: { value: "forsen" },
+    });
+    fireEvent.click(within(firstDialog).getByRole("button", { name: "Add" }));
+    await within(firstDialog).findByRole("button", { name: "Checking…" });
+    fireEvent.click(
+      within(firstDialog).getByRole("button", { name: "Close add streamer" })
+    );
+
+    fireEvent.click(document.querySelector("button.avatarBtn.add")!);
+    const reopenedDialog = await screen.findByRole("dialog", {
+      name: /add streamer/i,
+    });
+    const reopenedInput = within(reopenedDialog).getByPlaceholderText("e.g. xQc");
+    fireEvent.change(reopenedInput, { target: { value: "couriway" } });
+
+    await act(async () => {
+      validation.resolve(
+        makeJsonResponse({ ok: true, runId: 12345, milestones: [] })
+      );
+      await validation.promise;
+    });
+
+    expect(
+      screen.getByRole("dialog", { name: /add streamer/i })
+    ).toBeTruthy();
+    expect((reopenedInput as HTMLInputElement).value).toBe("couriway");
+    expect(screen.queryByText("forsen")).toBeNull();
+  });
+
+  it("rolls back add streamer optimistic UI on save failure", async () => {
+    const initialCfg = {
+      streamers: ["xQcOW"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    };
+
+    // Defer the PUT so the optimistic tile is observable before rollback.
+    const deferredPut = createDeferredResponse();
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, init?: any) => {
+      const u = String(url);
+      const method = String(init?.method || "GET").toUpperCase();
+      if (u.includes("/config") && method === "GET") {
+        return makeJsonResponse(initialCfg);
+      }
+      if (u.includes("/config") && method === "PUT") {
+        return deferredPut.promise;
       }
       return makeJsonResponse({ ok: true, profiles: {}, statuses: {} });
     });
@@ -1130,7 +1418,9 @@ describe("App", () => {
     fireEvent.change(input, { target: { value: "forsen" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add" }));
 
-    expect(screen.getByText("forsen")).toBeTruthy();
+    // Optimistic tile appears once the (async) Paceman check passes.
+    expect(await screen.findByText("forsen")).toBeTruthy();
+    deferredPut.resolve(makeJsonResponse({ ok: false }, false, 500));
 
     await waitFor(() => {
       expect(screen.queryByText("forsen")).toBeNull();
