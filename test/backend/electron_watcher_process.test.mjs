@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import watcherProcess from "../../electron/watcher_process.js";
 
@@ -82,5 +82,40 @@ describe("electron/watcher_process", () => {
     expect(resolveAppRootPath(packagedDir)).toBe(
       "/Applications/runAlert.app/Contents/Resources"
     );
+  });
+
+  it("restarts an unexpectedly exited watcher with bounded backoff", () => {
+    vi.useFakeTimers();
+    const children = [];
+    const spawn = () => {
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.killed = false;
+      child.kill = () => {
+        child.killed = true;
+      };
+      children.push(child);
+      return child;
+    };
+    const handle = startWatcher({
+      userDataPath: "/tmp/runalert-user-data",
+      configPath: "/tmp/runalert-user-data/config.json",
+      spawn,
+      logger: { log() {}, warn() {}, error() {} },
+    });
+
+    children[0].emit("exit", 1, null);
+    expect(children).toHaveLength(1);
+    vi.advanceTimersByTime(999);
+    expect(children).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(children).toHaveLength(2);
+
+    handle.stop();
+    children[1].emit("exit", 1, null);
+    vi.advanceTimersByTime(60_000);
+    expect(children).toHaveLength(2);
+    vi.useRealTimers();
   });
 });

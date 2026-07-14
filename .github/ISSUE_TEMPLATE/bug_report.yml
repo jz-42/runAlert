@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a reproducible problem in runAlert
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve runAlert. Do not include credentials or pairing links.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: v1.0.0, web, or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Web, macOS, Windows]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List the smallest reliable sequence that triggers the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include OS/browser versions and sanitized logs or screenshots if useful.

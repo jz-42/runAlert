@@ -23,6 +23,7 @@ dashboard/node_modules/
 # Local env and config
 .env
 .env.*
+!.env.example
 configs/
 **/CONTEXT.md
 CONTEXT_EXPORT*.md

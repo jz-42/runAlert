@@ -1,8 +1,15 @@
+const DESKTOP_API_BASE =
+  typeof window !== "undefined" &&
+  typeof (window as any).runAlertDesktop?.apiBase === "string"
+    ? (window as any).runAlertDesktop.apiBase.trim()
+    : "";
+
 export const API_BASE =
-  typeof import.meta.env.VITE_API_BASE === "string" &&
+  DESKTOP_API_BASE ||
+  (typeof import.meta.env.VITE_API_BASE === "string" &&
   import.meta.env.VITE_API_BASE.trim().length > 0
     ? import.meta.env.VITE_API_BASE
-    : "";
+    : "");
 
 const TWITCH_STATUS_BASE =
   typeof import.meta.env.VITE_TWITCH_STATUS_BASE === "string" &&
@@ -10,11 +17,36 @@ const TWITCH_STATUS_BASE =
     ? import.meta.env.VITE_TWITCH_STATUS_BASE
     : "";
 
-const TOKEN_STORAGE_KEY = "runalert-token";
-let cachedToken: string | null = null;
+const DEVICE_CREDENTIAL_STORAGE_KEY = "runalert-device-credential-v1";
+let cachedCredential: string | null = null;
+let credentialPromise: Promise<string> | null = null;
+let cachedEnvelope: ConfigEnvelope | null = null;
+let bootstrapEnvelope: ConfigEnvelope | null = null;
+
+export type ConfigEnvelope<T = any> = {
+  schemaVersion: number;
+  revision: number;
+  updatedAt: string;
+  config: T;
+};
+
+export class ConfigConflictError<T = any> extends Error {
+  serverEnvelope: ConfigEnvelope<T>;
+  serverValue: T;
+
+  constructor(serverEnvelope: ConfigEnvelope<T>) {
+    super("Synced settings changed on another device.");
+    this.name = "ConfigConflictError";
+    this.serverEnvelope = serverEnvelope;
+    this.serverValue = serverEnvelope.config;
+  }
+}
 
 export function __resetApiTestState() {
-  cachedToken = null;
+  cachedCredential = null;
+  credentialPromise = null;
+  cachedEnvelope = null;
+  bootstrapEnvelope = null;
 }
 
 export function isDesktopApp() {
@@ -48,90 +80,299 @@ export function getTwitchStatusBase() {
   return TWITCH_STATUS_BASE || API_BASE || getWindowOrigin();
 }
 
-function generateToken() {
-  const bytes = new Uint8Array(16);
-  if (globalThis.crypto?.getRandomValues) {
-    globalThis.crypto.getRandomValues(bytes);
-  } else {
-    for (let i = 0; i < bytes.length; i += 1) {
-      bytes[i] = Math.floor(Math.random() * 256);
-    }
-  }
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function readTokenFromUrl(): string | null {
-  try {
-    if (typeof window === "undefined") return null;
-    const raw = new URLSearchParams(window.location.search).get("token");
-    const token = raw?.trim();
-    return token ? token : null;
-  } catch {
-    return null;
-  }
-}
-
+/** @deprecated The v1 client never uses URL or query-string config tokens. */
 export function getToken() {
-  if (isDesktopApp()) return "";
-  if (cachedToken) return cachedToken;
-  if (typeof window === "undefined") return "";
-
-  const urlToken = readTokenFromUrl();
-  if (urlToken) {
-    cachedToken = urlToken;
-    try {
-      window.localStorage.setItem(TOKEN_STORAGE_KEY, urlToken);
-    } catch {
-      // ignore storage failures
-    }
-    return cachedToken;
-  }
-
-  try {
-    const stored = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (stored && stored.trim()) {
-      cachedToken = stored.trim();
-      return cachedToken;
-    }
-  } catch {
-    // ignore storage failures
-  }
-
-  cachedToken = generateToken();
-  try {
-    window.localStorage.setItem(TOKEN_STORAGE_KEY, cachedToken);
-  } catch {
-    // ignore storage failures
-  }
-  return cachedToken;
+  return "";
 }
 
-function configUrl() {
-  const token = getToken();
-  return `${API_BASE}/config${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+function isEnvelope(value: any): value is ConfigEnvelope {
+  return (
+    !!value &&
+    value.schemaVersion === 1 &&
+    Number.isInteger(value.revision) &&
+    value.revision >= 1 &&
+    typeof value.updatedAt === "string" &&
+    !!value.config &&
+    typeof value.config === "object"
+  );
+}
+
+function isConfigObject(value: any) {
+  return !!value && typeof value === "object" && Array.isArray(value.streamers);
+}
+
+function compatibilityEnvelope(config: any, response: Response): ConfigEnvelope {
+  const etagRevision = Number(
+    String(response.headers?.get?.("etag") || "").replace(/\D/g, "")
+  );
+  return {
+    schemaVersion: 1,
+    revision:
+      (Number.isInteger(etagRevision) && etagRevision > 0
+        ? etagRevision
+        : cachedEnvelope?.revision) || 1,
+    updatedAt: new Date().toISOString(),
+    config,
+  };
+}
+
+function readStoredCredential() {
+  if (typeof window === "undefined") return "";
+  try {
+    const value = window.localStorage
+      .getItem(DEVICE_CREDENTIAL_STORAGE_KEY)
+      ?.trim();
+    return value?.startsWith("ra1_") ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+function storeCredential(credential: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(DEVICE_CREDENTIAL_STORAGE_KEY, credential);
+    window.localStorage.removeItem("runalert-token");
+  } catch {
+    // A blocked storage surface will bootstrap again next visit.
+  }
+}
+
+export async function getDeviceCredential(): Promise<string> {
+  if (isDesktopApp()) return "";
+  if (cachedCredential) return cachedCredential;
+  const stored = readStoredCredential();
+  if (stored) {
+    cachedCredential = stored;
+    return stored;
+  }
+  if (credentialPromise) return credentialPromise;
+
+  credentialPromise = (async () => {
+    const r = await fetch(`${API_BASE}/api/devices`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceName: "Browser",
+      }),
+    });
+    if (!r.ok) throw new Error(`POST /api/devices ${r.status}`);
+    const body = await r.json();
+    const credential = String(body?.credential || "").trim();
+    if (!credential.startsWith("ra1_") || !isEnvelope(body?.envelope)) {
+      throw new Error("POST /api/devices returned an invalid response");
+    }
+    cachedCredential = credential;
+    cachedEnvelope = body.envelope;
+    bootstrapEnvelope = body.envelope;
+    storeCredential(credential);
+    return credential;
+  })().finally(() => {
+    credentialPromise = null;
+  });
+
+  return credentialPromise;
+}
+
+function authorizationHeaders(credential: string) {
+  return { Authorization: `Bearer ${credential}` };
+}
+
+async function fetchConfigEnvelope(credential: string) {
+  const r = await fetch(`${API_BASE}/api/config`, {
+    headers: authorizationHeaders(credential),
+  });
+  if (!r.ok) throw new Error(`GET /api/config ${r.status}`);
+  const envelope = await r.json();
+  if (isConfigObject(envelope)) {
+    const compatible = compatibilityEnvelope(envelope, r);
+    cachedEnvelope = compatible;
+    return compatible;
+  }
+  if (!isEnvelope(envelope)) {
+    throw new Error("GET /api/config returned an invalid envelope");
+  }
+  cachedEnvelope = envelope;
+  return envelope;
 }
 
 export async function getConfig() {
-  const r = await fetch(configUrl());
-  if (!r.ok) throw new Error(`GET /config ${r.status}`);
-  return r.json();
+  if (isDesktopApp()) {
+    try {
+      const synced = await (window as any).runAlertDesktop?.sync?.pull?.();
+      if (synced?.config) return synced.config;
+      if (synced?.envelope?.config) return synced.envelope.config;
+    } catch {
+      // The loopback copy remains available while the network is offline.
+    }
+    const r = await fetch(`${API_BASE}/config`);
+    if (!r.ok) throw new Error(`GET /config ${r.status}`);
+    const body = await r.json();
+    return body?.config && body?.ok ? body.config : body;
+  }
+
+  const credential = await getDeviceCredential();
+  if (bootstrapEnvelope) {
+    const envelope = bootstrapEnvelope;
+    bootstrapEnvelope = null;
+    return envelope.config;
+  }
+  return (await fetchConfigEnvelope(credential)).config;
 }
 
 export async function putConfig(cfg: unknown) {
-  await putConfigRaw(cfg);
-
-  // Don't trust PUT response shape — re-fetch canonical config
-  return getConfig();
+  return putConfigRaw(cfg);
 }
 
 export async function putConfigRaw(cfg: unknown) {
-  const r = await fetch(configUrl(), {
+  if (isDesktopApp()) {
+    const r = await fetch(`${API_BASE}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    });
+    if (!r.ok) throw new Error(`PUT /config ${r.status}`);
+    const body = await r.json().catch(() => ({}));
+    const localConfig = body?.config ?? body;
+    const synced = await (window as any).runAlertDesktop?.sync?.putConfig?.(
+      localConfig
+    );
+    return synced?.config ?? synced?.envelope?.config ?? localConfig;
+  }
+
+  const credential = await getDeviceCredential();
+  if (!cachedEnvelope) await fetchConfigEnvelope(credential);
+  const expectedRevision = cachedEnvelope!.revision;
+  const r = await fetch(`${API_BASE}/api/config`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(cfg),
+    headers: {
+      ...authorizationHeaders(credential),
+      "Content-Type": "application/json",
+      "If-Match": `"${expectedRevision}"`,
+    },
+    body: JSON.stringify({ expectedRevision, config: cfg }),
   });
-  if (!r.ok) throw new Error(`PUT /config ${r.status}`);
-  return r.json().catch(() => ({}));
+  const body = await r.json().catch(() => ({}));
+  if (r.status === 409 && isEnvelope(body?.envelope)) {
+    cachedEnvelope = body.envelope;
+    throw new ConfigConflictError(body.envelope);
+  }
+  if (!r.ok) throw new Error(`PUT /api/config ${r.status}`);
+  if (isEnvelope(body)) {
+    cachedEnvelope = body;
+    return body.config;
+  }
+  const compatibleConfig = isConfigObject(body)
+    ? body
+    : isConfigObject(body?.config)
+      ? body.config
+      : cfg;
+  cachedEnvelope = {
+    ...compatibilityEnvelope(compatibleConfig, r),
+    revision: expectedRevision + 1,
+  };
+  return compatibleConfig;
+}
+
+export async function createPairingLink(deviceName = "Desktop app") {
+  const credential = await getDeviceCredential();
+  const r = await fetch(`${API_BASE}/api/pairing-links`, {
+    method: "POST",
+    headers: {
+      ...authorizationHeaders(credential),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ deviceName }),
+  });
+  if (!r.ok) throw new Error(`POST /api/pairing-links ${r.status}`);
+  return r.json();
+}
+
+export async function exchangePairingCode(code: string, deviceName: string) {
+  if (isDesktopApp() && (window as any).runAlertDesktop?.sync?.pair) {
+    return (window as any).runAlertDesktop.sync.pair({ code, deviceName });
+  }
+  const r = await fetch(`${API_BASE}/api/pair/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, deviceName }),
+  });
+  if (!r.ok) throw new Error(`POST /api/pair/exchange ${r.status}`);
+  return r.json();
+}
+
+export async function getReleaseManifest() {
+  const r = await fetch(`${API_BASE}/api/releases/stable`);
+  if (!r.ok) throw new Error(`GET /api/releases/stable ${r.status}`);
+  return r.json();
+}
+
+export function subscribeConfigChanges(
+  onRevision: (revision: number | null, source: "event" | "poll") => void,
+  {
+    pollIntervalMs = 60_000,
+    reconnectDelayMs = 3_000,
+  }: { pollIntervalMs?: number; reconnectDelayMs?: number } = {}
+) {
+  let stopped = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let activeController: AbortController | null = null;
+  const pollTimer = window.setInterval(() => {
+    if (!stopped) onRevision(null, "poll");
+  }, pollIntervalMs);
+
+  async function connect() {
+    if (stopped || isDesktopApp()) return;
+    try {
+      const credential = await getDeviceCredential();
+      activeController = new AbortController();
+      const response = await fetch(`${API_BASE}/api/config/events`, {
+        headers: authorizationHeaders(credential),
+        signal: activeController.signal,
+      });
+      if (!response.ok || !response.body) {
+        throw new Error(`GET /api/config/events ${response.status}`);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (!stopped) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary >= 0) {
+          const block = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          const dataLine = block
+            .split("\n")
+            .find((line) => line.startsWith("data:"));
+          if (dataLine) {
+            try {
+              const event = JSON.parse(dataLine.slice(5).trim());
+              if (event?.type === "revision" && Number.isInteger(event.revision)) {
+                onRevision(event.revision, "event");
+              }
+            } catch {
+              // Ignore malformed event frames and keep the authenticated stream alive.
+            }
+          }
+          boundary = buffer.indexOf("\n\n");
+        }
+      }
+    } catch (error: any) {
+      if (stopped || error?.name === "AbortError") return;
+    }
+    if (!stopped) reconnectTimer = setTimeout(connect, reconnectDelayMs);
+  }
+
+  void connect();
+  return () => {
+    stopped = true;
+    window.clearInterval(pollTimer);
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    activeController?.abort();
+  };
 }
 
 export async function testNotify(title?: string, message?: string) {

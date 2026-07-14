@@ -1,6 +1,15 @@
 const fs = require("fs");
 const path = require("path");
+const { promisify } = require("util");
+const { execFile } = require("child_process");
 const { notarize } = require("@electron/notarize");
+
+const execFileAsync = promisify(execFile);
+
+async function staple(appPath) {
+  await execFileAsync("xcrun", ["stapler", "staple", "-v", appPath]);
+  await execFileAsync("xcrun", ["stapler", "validate", appPath]);
+}
 
 async function notarizeMac(context) {
   const { electronPlatformName, appOutDir, packager } = context;
@@ -25,6 +34,7 @@ async function notarizeMac(context) {
       appPath,
       keychainProfile,
     });
+    await staple(appPath);
     return;
   }
 
@@ -51,6 +61,7 @@ async function notarizeMac(context) {
     appleIdPassword,
     teamId,
   });
+  await staple(appPath);
 }
 
 module.exports = notarizeMac;

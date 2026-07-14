@@ -2617,3 +2617,134 @@ a.tag:hover{
   width: 14px;
   height: 14px;
 }
+
+.syncNotice{
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(231, 180, 78, 0.38);
+  border-radius: 12px;
+  background: rgba(231, 180, 78, 0.1);
+  color: rgba(255, 239, 200, 0.96);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.syncNotice button{
+  min-height: 30px;
+  padding: 4px 10px;
+}
+
+.syncNotice--conflict{
+  border-color: rgba(240, 120, 110, 0.46);
+  background: rgba(240, 120, 110, 0.1);
+  color: rgba(255, 225, 220, 0.98);
+}
+
+.syncSection{
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.035);
+}
+
+.syncSection h3{
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.syncSection p{
+  margin: 4px 0 12px;
+  color: rgba(233,238,247,0.68);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.syncCodeRow,
+.syncBackupActions,
+.pairingResult{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.syncCodeLabel{
+  display: block;
+  margin: 10px 0 5px;
+  font-size: 12px;
+  color: rgba(233,238,247,0.72);
+}
+
+.syncCodeRow input{
+  min-width: 150px;
+  min-height: 34px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 9px;
+  padding: 7px 10px;
+  background: rgba(0,0,0,0.2);
+  color: inherit;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.syncTroubleshooting{
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.syncTroubleshooting summary{
+  cursor: pointer;
+  color: rgba(205,220,245,0.82);
+}
+
+.syncTroubleshooting code{
+  display: inline-block;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.25);
+  letter-spacing: 0.12em;
+  font-size: 14px;
+}
+
+.syncSuccess{
+  color: #a9e8bd;
+  font-size: 13px;
+}
+
+.visuallyHidden{
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.platform-windows .settingsPanel,
+.platform-windows .qhModal{
+  border-radius: 8px;
+}
+
+.platform-mac .settingsPanel,
+.platform-mac .qhModal{
+  border-radius: 16px;
+}
+
+@media (max-width: 560px){
+  .syncNotice,
+  .syncCodeRow,
+  .syncBackupActions,
+  .pairingResult{
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

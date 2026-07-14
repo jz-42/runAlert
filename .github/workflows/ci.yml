@@ -9,11 +9,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Use Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -25,6 +27,9 @@ jobs:
       - name: Backend tests
         run: npm test
 
+      - name: Scan current tree and full history for secrets
+        run: npm run scan:secrets
+
       - name: Install dashboard deps
         run: npm ci
         working-directory: dashboard
@@ -33,12 +38,27 @@ jobs:
         run: npm test
         working-directory: dashboard
 
+      - name: Lint dashboard
+        run: npm run lint
+        working-directory: dashboard
+
+      - name: Build dashboard
+        run: npm run build
+        working-directory: dashboard
+
+      - name: Audit production dependencies
+        run: npm run audit:production
+
       - name: Install Playwright browsers (Chromium + Firefox)
         run: npx playwright install --with-deps chromium firefox
         working-directory: dashboard
 
       - name: Dashboard layout invariants (Playwright)
         run: npm run test:layout
+        working-directory: dashboard
+
+      - name: Dashboard accessibility (Playwright + axe)
+        run: npm run test:a11y
         working-directory: dashboard
 
       - name: Upload Playwright artifacts (on failure)
@@ -49,3 +69,25 @@ jobs:
           path: |
             dashboard/test-results
             dashboard/playwright-report
+
+  visual:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+        working-directory: dashboard
+      - run: npx playwright install chromium
+        working-directory: dashboard
+      - name: Deterministic Mac visual regression
+        run: npm run test:visual
+        working-directory: dashboard
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: dashboard-visual-diff
+          path: dashboard/test-results

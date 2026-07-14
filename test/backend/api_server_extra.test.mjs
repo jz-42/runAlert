@@ -55,7 +55,7 @@ describe("api/server extra contracts", () => {
     delete process.env.TWITCH_CLIENT_SECRET;
   });
 
-  it("sanitizes token values before creating per-user config files", async () => {
+  it("does not create per-user files for retired query tokens", async () => {
     const app = createApp({
       configPath,
       configDir,
@@ -65,14 +65,15 @@ describe("api/server extra contracts", () => {
 
     const res = await request(app).get("/config?token=..%2Fbad%3C%3Etoken");
 
-    expect(res.status).toBe(200);
-    expect(fs.readdirSync(configDir)).toEqual(["badtoken.json"]);
+    expect(res.status).toBe(410);
+    expect(fs.readdirSync(configDir)).toEqual([]);
   });
 
   it("rejects invalid quietHours payloads on PUT /config", async () => {
     const app = createApp({
       configPath,
       configDir,
+      enableLocalConfig: true,
       notifySend: vi.fn(async () => {}),
       paceman: {},
     });

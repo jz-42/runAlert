@@ -13,6 +13,27 @@ declare global {
 
 const DISTINCT_ID_KEY = "runalert-analytics-distinct-id";
 const DEFAULT_HOST = "https://app.posthog.com";
+const SAFE_PROPERTY_KEYS = new Set([
+  "action",
+  "count",
+  "milestone",
+  "platform",
+  "reason",
+  "source",
+  "state",
+  "surface",
+  "version",
+]);
+
+function currentPageWithoutSecrets() {
+  if (typeof window === "undefined" || !window.location?.href) return "";
+  try {
+    const url = new URL(window.location.href);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return "";
+  }
+}
 
 function readRuntimeConfig(): AnalyticsConfig {
   if (typeof window !== "undefined" && window.runAlertAnalytics) {
@@ -61,15 +82,13 @@ function sanitizeProperties(
 ): AnalyticsProperties {
   const out: AnalyticsProperties = {
     $lib: "runalert-web",
-    $current_url:
-      typeof window !== "undefined" && window.location?.href
-        ? window.location.href
-        : "",
+    $current_url: currentPageWithoutSecrets(),
   };
 
   if (!props || typeof props !== "object") return out;
 
   for (const [key, value] of Object.entries(props)) {
+    if (!SAFE_PROPERTY_KEYS.has(key)) continue;
     if (value == null) continue;
     if (
       typeof value === "string" ||

@@ -2,20 +2,22 @@ import "./App.css";
 
 import React, { useEffect, useRef, useState } from "react";
 import {
-  API_BASE,
+  createPairingLink,
+  exchangePairingCode,
   getConfig,
   getPacemanMilestones,
   getProfiles,
   getStatuses,
   getTwitchStatuses,
-  getToken,
+  getReleaseManifest,
   isDesktopApp,
-  testNotify,
   putConfigRaw,
+  subscribeConfigChanges,
 } from "./api";
 import { trackEvent } from "./analytics";
 import { CANONICAL_MILESTONES, milestoneLabel } from "./config";
 import { useConfigSurface } from "./persistence/useConfigSurface";
+import dashboardPackage from "../package.json";
 
 type MilestoneCfg = { thresholdSec?: number; enabled?: boolean };
 type Config = {
@@ -35,6 +37,26 @@ type Config = {
   };
 };
 
+type ReleaseManifest = {
+  version: string;
+  mac?: {
+    available?: boolean;
+    dmgUrl?: string | null;
+    zipUrl?: string | null;
+    universal?: boolean;
+  };
+  windows?: {
+    available?: boolean;
+    storeUrl?: string | null;
+  };
+};
+
+type PairingLink = {
+  deepLink: string;
+  code: string;
+  expiresAt: string;
+};
+
 function clampInt(n: number, min: number, max: number) {
   if (!Number.isFinite(n)) return min;
   return Math.max(min, Math.min(max, Math.trunc(n)));
@@ -49,8 +71,8 @@ function splitMMSS(thresholdSec?: number): { mm: string; ss: string } {
   return { mm: String(mm), ss: String(ss).padStart(2, "0") };
 }
 
-const APP_VERSION = "0.2";
-const APP_CHANNEL = "Beta";
+const APP_VERSION = dashboardPackage.version;
+const APP_CHANNEL = "Stable";
 const MAX_STREAMERS = 15;
 const MAX_QUIET_SPANS = 3;
 const BROWSER_ALERTS_LEGACY_KEY = "runalert-browser-alerts";
@@ -59,8 +81,7 @@ const ONBOARDING_DISMISSED_KEY = "runalert-onboarding-dismissed";
 const APP_FIRST_OPENED_KEY = "runalert-app-first-opened";
 const DESKTOP_BG_RUNNING_KEY = "runalert-desktop-background-running";
 const GITHUB_REPO_URL = "https://github.com/jz-42/runAlert";
-const GITHUB_BETA_RELEASE_URL =
-  "https://github.com/jz-42/runAlert/releases/tag/v0.1.0-beta.2";
+const GITHUB_RELEASE_URL = `${GITHUB_REPO_URL}/releases/tag/v${APP_VERSION}`;
 
 type AmPm = "AM" | "PM";
 type Time12 = { hh: string; mm: string; ampm: AmPm };
@@ -85,7 +106,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
         <>
           Click Download DMG (
           <span className="installGuideEmphasisDownload">
-            runAlert-0.1.0-beta.2-arm64.dmg
+            runAlert-{APP_VERSION}-universal.dmg
           </span>
           ).
         </>
@@ -110,7 +131,7 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
           and verify the{" "}
           <a
             className="installGuideInlineLink installGuideInlineLink--checksum"
-            href={GITHUB_BETA_RELEASE_URL}
+            href={GITHUB_RELEASE_URL}
             target="_blank"
             rel="noreferrer"
           >
@@ -145,13 +166,13 @@ const INSTALL_GUIDES: Record<InstallGuidePlatform, InstallGuideStep[]> = {
   windows: [
     {
       eyebrow: "Step 1",
-      title: "Download runAlert",
-      body: "Click Download EXE.",
+      title: "Get runAlert from Microsoft Store",
+      body: "Open the certified Store listing and select Install.",
     },
     {
       eyebrow: "Step 2",
-      title: "Open the installer",
-      body: "Run the installer and follow the prompts.",
+      title: "Open runAlert",
+      body: "Launch runAlert from Start after the Store finishes installing it.",
     },
     {
       eyebrow: "Step 3",
@@ -287,16 +308,19 @@ function stripLegacyForsenConfig(config: Config): Config {
 
 function App() {
   const desktopApp = isDesktopApp();
+  const platform = desktopApp
+    ? (window as any).runAlertDesktop?.platform === "win32"
+      ? "windows"
+      : "mac"
+    : "web";
   const [showSettings, setShowSettings] = useState(false);
   const [showQuietHours, setShowQuietHours] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAgentSettings, setShowAgentSettings] = useState(false);
+  const [showSyncSettings, setShowSyncSettings] = useState(false);
   const [showAddStreamer, setShowAddStreamer] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
-  const [installCopied, setInstallCopied] = useState<"mac" | "windows" | null>(
-    null
-  );
   const [showInstallDetails, setShowInstallDetails] = useState(false);
   const [installGuidePlatform, setInstallGuidePlatform] =
     useState<InstallGuidePlatform>("mac");
@@ -305,16 +329,19 @@ function App() {
   const [addStreamerErr, setAddStreamerErr] = useState<string | null>(null);
   const [addStreamerBusy, setAddStreamerBusy] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
-  const [showCopyFallback, setShowCopyFallback] = useState(false);
-  const [copyFallbackCommand, setCopyFallbackCommand] = useState("");
-  const [copyFallbackTitle, setCopyFallbackTitle] =
-    useState("Copy install command");
+  const [releaseManifest, setReleaseManifest] =
+    useState<ReleaseManifest | null>(null);
+  const [pairingLink, setPairingLink] = useState<PairingLink | null>(null);
+  const [pairingCode, setPairingCode] = useState("");
+  const [pairingStatus, setPairingStatus] = useState<
+    "idle" | "working" | "paired" | "error"
+  >("idle");
+  const [pairingError, setPairingError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const [draft, setDraft] = useState<Record<string, MilestoneCfg>>({});
   const draftRef = useRef(draft);
-  const [testStatus, setTestStatus] = useState<
-    "idle" | "sending" | "success" | "error"
-  >("idle");
   const [browserPermission, setBrowserPermission] = useState<
     NotificationPermission | "unsupported"
   >(() => {
@@ -328,6 +355,7 @@ function App() {
 
   const configSurface = useConfigSurface<Config | null>({
     initialValue: null,
+    offlineStorageKey: "runalert-pending-config-v1",
     save: async (next) => {
       if (!next) return next;
       const sanitized = stripLegacyForsenConfig(next);
@@ -343,7 +371,6 @@ function App() {
     },
   });
   const cfg = configSurface.value;
-  const confirmedCfg = configSurface.confirmedValue;
   const [err, setErr] = useState<string | null>(null);
   const [quietDraft, setQuietDraft] = useState<QuietSpanDraft[]>([]);
   const quietDraftRef = useRef(quietDraft);
@@ -387,6 +414,34 @@ function App() {
     Record<string, { avatarUrl: string | null; twitch?: string | null }>
   >({});
 
+  useEffect(() => {
+    if (!cfg) return;
+    return subscribeConfigChanges(async () => {
+      if (configSurface.dirty) return;
+      try {
+        const next = await getConfig();
+        configSurface.hydrateConfirmed(stripLegacyForsenConfig(next));
+      } catch {
+        // The regular offline state remains the single user-facing sync signal.
+      }
+    });
+  }, [Boolean(cfg), configSurface.dirty]);
+
+  useEffect(() => {
+    if (!cfg || desktopApp) return;
+    let cancelled = false;
+    void getReleaseManifest()
+      .then((manifest) => {
+        if (!cancelled) setReleaseManifest(manifest as ReleaseManifest);
+      })
+      .catch(() => {
+        if (!cancelled) setReleaseManifest(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [Boolean(cfg), desktopApp]);
+
   const [dragCandidate, setDragCandidate] = useState<{
     index: number;
     name: string;
@@ -417,36 +472,15 @@ function App() {
     Record<string, { runId: number | null; milestones: Record<string, boolean> }>
   >({});
 
-  const installToken = getToken();
-  const origin =
-    typeof window !== "undefined" && window.location?.origin
-      ? window.location.origin
-      : "";
-  const installBase = API_BASE || origin;
-  const installChannel = "stable";
-  const installQuery = new URLSearchParams();
-  if (installToken) installQuery.set("token", installToken);
-  installQuery.set("channel", installChannel);
-  const installQueryString = installQuery.toString();
-
-  const macInstallUrl = `${installBase}/install/macos.command${
-    installQueryString ? `?${installQueryString}` : ""
-  }`;
-  const windowsInstallUrl = `${installBase}/install/windows.ps1${
-    installQueryString ? `?${installQueryString}` : ""
-  }`;
-  const macViewInstallUrl = `${macInstallUrl}${
-    macInstallUrl.includes("?") ? "&" : "?"
-  }view=1`;
-  const windowsViewInstallUrl = `${windowsInstallUrl}${
-    windowsInstallUrl.includes("?") ? "&" : "?"
-  }view=1`;
-  const macInstallCommand = `curl -fsSL "${macViewInstallUrl}" | bash`;
-  const windowsInstallCommand = `powershell -ExecutionPolicy Bypass -NoProfile -Command "iwr -useb '${windowsInstallUrl}' | iex"`;
-  const appDownloadBase = API_BASE || "";
-  const macAppDownloadUrl = `${appDownloadBase}/download/macos/dmg`;
-  const macAppZipUrl = `${appDownloadBase}/download/macos/zip`;
-  const windowsAppDownloadUrl = `${appDownloadBase}/download/windows/exe`;
+  const macAppDownloadUrl = releaseManifest?.mac?.available
+    ? releaseManifest.mac.dmgUrl || null
+    : null;
+  const macAppZipUrl = releaseManifest?.mac?.available
+    ? releaseManifest.mac.zipUrl || null
+    : null;
+  const windowsStoreUrl = releaseManifest?.windows?.available
+    ? releaseManifest.windows.storeUrl || null
+    : null;
   const streamers: string[] = cfg?.streamers ?? [];
 
   const milestoneEntries = Object.entries(draft);
@@ -500,12 +534,89 @@ function App() {
     }
   }
 
-  function restoreQuietDraftFromConfirmed() {
-    if (!confirmedCfg) return;
-    const fromCfg = normalizeQuietHoursToArray(confirmedCfg.quietHours)
-      .map(parseQuietRangeToDraft)
-      .filter(Boolean) as QuietSpanDraft[];
-    setQuietDraft(fromCfg.length ? fromCfg.slice(0, MAX_QUIET_SPANS) : []);
+  async function generatePairingLink() {
+    setPairingStatus("working");
+    setPairingError(null);
+    try {
+      const link = await createPairingLink("Desktop app");
+      setPairingLink(link as PairingLink);
+      setPairingStatus("idle");
+    } catch (error: any) {
+      setPairingStatus("error");
+      setPairingError(error?.message || "Could not create a pairing link.");
+    }
+  }
+
+  async function pairDesktopManually() {
+    const normalized = pairingCode.trim().toUpperCase();
+    if (!/^[A-Z0-9]{4}-?[A-Z0-9]{4}$/.test(normalized)) {
+      setPairingError("Enter the eight-character pairing code from runalert.app.");
+      return;
+    }
+    setPairingStatus("working");
+    setPairingError(null);
+    try {
+      const result = await exchangePairingCode(normalized, "Desktop app");
+      const imported = result?.envelope?.config;
+      if (imported) configSurface.hydrateConfirmed(stripLegacyForsenConfig(imported));
+      setPairingStatus("paired");
+    } catch (error: any) {
+      setPairingStatus("error");
+      setPairingError(error?.message || "The pairing code is invalid or expired.");
+    }
+  }
+
+  function exportConfigBackup() {
+    if (!cfg) return;
+    const blob = new Blob(
+      [
+        `${JSON.stringify(
+          { schemaVersion: 1, exportedAt: new Date().toISOString(), config: cfg },
+          null,
+          2
+        )}\n`,
+      ],
+      { type: "application/json" }
+    );
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = "runalert-config-v1.json";
+    anchor.click();
+    URL.revokeObjectURL(href);
+    void trackEvent("config_exported", { surface: "settings" });
+  }
+
+  async function importConfigBackup(file: File) {
+    setImportError(null);
+    try {
+      const parsed = JSON.parse(await file.text());
+      const imported = (parsed?.config || parsed) as Config;
+      if (
+        !imported ||
+        !Array.isArray(imported.streamers) ||
+        imported.streamers.length > MAX_STREAMERS ||
+        !Array.isArray(imported.quietHours) ||
+        !imported.defaultMilestones ||
+        !CANONICAL_MILESTONES.every(
+          (milestone) => imported.defaultMilestones?.[milestone]
+        ) ||
+        !imported.profiles ||
+        typeof imported.profiles !== "object"
+      ) {
+        throw new Error("This is not a valid runAlert v1 config backup.");
+      }
+      updateConfig(() => stripLegacyForsenConfig(imported), {
+        save: "immediate",
+        onError: (message) => setImportError(message),
+        onSuccess: () => setImportError(null),
+      });
+      void trackEvent("config_imported", { surface: "settings" });
+    } catch (error: any) {
+      setImportError(error?.message || "Could not read this config backup.");
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
   }
 
   function updateMilestoneDraft(
@@ -561,26 +672,6 @@ function App() {
   function isStreamerLive(name: string): boolean {
     const s = twitchStatusByName?.[name];
     return s?.isTwitchLive === true;
-  }
-
-  async function copyInstallCommand(command: string, platform: "mac" | "windows") {
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(command);
-        setInstallCopied(platform);
-        setTimeout(() => {
-          setInstallCopied((prev) => (prev === platform ? null : prev));
-        }, 1800);
-        return;
-      }
-    } catch {
-      // fall through to manual prompt
-    }
-    setCopyFallbackCommand(command);
-    setCopyFallbackTitle(
-      platform === "mac" ? "Copy macOS install command" : "Copy Windows install command"
-    );
-    setShowCopyFallback(true);
   }
 
   async function enableBrowserAlerts() {
@@ -789,19 +880,6 @@ function App() {
     }
   }
 
-  async function sendTestNotification() {
-    if (testStatus === "sending") return;
-    setTestStatus("sending");
-    try {
-      await testNotify("runAlert test", "Agent is connected and ready.");
-      setTestStatus("success");
-      setTimeout(() => setTestStatus("idle"), 2500);
-    } catch {
-      setTestStatus("error");
-      setTimeout(() => setTestStatus("idle"), 3500);
-    }
-  }
-
   function openQuietHoursEditor() {
     if (!cfg) {
       setErr("Config not loaded yet.");
@@ -869,7 +947,6 @@ function App() {
         debounceMs: 700,
         onError: (message) => {
           setQuietErr(message);
-          restoreQuietDraftFromConfirmed();
         },
       }
     );
@@ -1057,9 +1134,7 @@ function App() {
   useEffect(() => {
     function onEscape(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
-      if (showCopyFallback) {
-        setShowCopyFallback(false);
-      } else if (pendingRemove) {
+      if (pendingRemove) {
         setPendingRemove(null);
       } else if (showAddStreamer) {
         closeAddStreamerPrompt();
@@ -1071,6 +1146,8 @@ function App() {
         setShowNotifications(false);
       } else if (showAgentSettings) {
         setShowAgentSettings(false);
+      } else if (showSyncSettings) {
+        setShowSyncSettings(false);
       } else if (showInstallDetails) {
         setShowInstallDetails(false);
       } else if (showOnboarding) {
@@ -1319,9 +1396,9 @@ function App() {
   const installGuide = INSTALL_GUIDES[installGuidePlatform];
   const activeInstallStep = installGuide[installGuideStep] ?? installGuide[0];
   const guidePrimaryUrl =
-    installGuidePlatform === "mac" ? macAppDownloadUrl : windowsAppDownloadUrl;
+    installGuidePlatform === "mac" ? macAppDownloadUrl : windowsStoreUrl;
   const guidePrimaryLabel =
-    installGuidePlatform === "mac" ? "Download DMG" : "Download EXE";
+    installGuidePlatform === "mac" ? "Download universal DMG" : "Open Microsoft Store";
 
   function setTileRef(name: string, node: HTMLDivElement | null) {
     tileRefs.current[name] = node;
@@ -1630,7 +1707,7 @@ function App() {
   }
 
   return (
-    <div className="page">
+    <div className={`page platform-${platform}`} data-platform={platform}>
       <div className="frame" data-testid="header-frame">
         <div className="titleRow" data-testid="header-titleRow">
           <div className="titleLeft">
@@ -1653,7 +1730,7 @@ function App() {
                       href={GITHUB_REPO_URL}
                       target="_blank"
                       rel="noopener noreferrer"
-                      title="Beta — expect possible bugs and occasional notification delays."
+                      title="Stable runAlert v1 release"
                     >
                       {APP_CHANNEL}
                     </a>
@@ -1909,6 +1986,28 @@ function App() {
 
         {err ? (
           <div className="configError">{err}</div>
+        ) : null}
+        {configSurface.saveState === "offline" ? (
+          <div className="syncNotice" role="status">
+            <span>Offline — changes are saved on this device and will retry automatically.</span>
+            <button type="button" onClick={() => void configSurface.retrySave().catch(() => {})}>
+              Retry now
+            </button>
+          </div>
+        ) : null}
+        {configSurface.saveState === "conflict" ? (
+          <div className="syncNotice syncNotice--conflict" role="alert">
+            <span>These settings changed on another device. Choose which version to keep.</span>
+            <button type="button" onClick={configSurface.resolveConflictWithServer}>
+              Use synced version
+            </button>
+            <button
+              type="button"
+              onClick={() => void configSurface.resolveConflictKeepLocal().catch(() => {})}
+            >
+              Keep this device
+            </button>
+          </div>
         ) : null}
         {!cfg ? (
           <div className="loadingText">Loading config…</div>
@@ -2233,6 +2332,7 @@ function App() {
               <button
                 className="avatarBtn"
                 type="button"
+                aria-label={`Edit alerts for ${name}`}
                 draggable={false}
                 onPointerDown={(e) => beginPointerDrag(e, idx, name)}
                 onClick={() => {
@@ -2295,7 +2395,11 @@ function App() {
           ))}
 
           <div className="avatarTile addTile">
-            <button className="avatarBtn add" onClick={openAddStreamerPrompt}>
+            <button
+              className="avatarBtn add"
+              aria-label="Add streamer"
+              onClick={openAddStreamerPrompt}
+            >
               <svg className="addPlus" viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   fill="currentColor"
@@ -2353,7 +2457,9 @@ function App() {
             <div className="downloadHubHeader">
               <div className="downloadHubTitle">Desktop app</div>
               <div className="downloadHubText">
-                Get background alerts even when closed.
+                {releaseManifest?.version
+                  ? `v${releaseManifest.version} · signed apps for background alerts.`
+                  : "Signed apps for background alerts."}
               </div>
             </div>
             <div className="downloadHubActions">
@@ -2367,7 +2473,7 @@ function App() {
                 <svg width="14" height="14" viewBox="0 0 384 512" fill="currentColor" style={{marginRight: 6, flexShrink: 0}}>
                   <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184 4 273.5c0 26.2 4.8 53.3 14.4 81.2 12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/>
                 </svg>
-                Download Mac Beta
+                {macAppDownloadUrl ? "Download Mac" : "Mac app coming soon"}
               </button>
               <button
                 className="installButton installButton--primary"
@@ -2379,7 +2485,7 @@ function App() {
                 <svg width="14" height="14" viewBox="0 0 448 512" fill="currentColor" style={{marginRight: 6, flexShrink: 0}}>
                   <path d="M0 93.7l183.6-25.3v177.4H0V93.7zm0 324.6l183.6 25.3V268.4H0v149.9zm203.8 28L448 480V268.4H203.8v177.9zm0-380.6v180.1H448V32L203.8 65.7z"/>
                 </svg>
-                Download Windows Beta
+                {windowsStoreUrl ? "Get from Microsoft Store" : "Windows app coming soon"}
               </button>
             </div>
             {browserAlertsErr ? (
@@ -2611,9 +2717,11 @@ function App() {
 
                     {installGuideStep === 0 ? (
                       <div className="installGuideActions">
-                        <a
+                        {guidePrimaryUrl ? <a
                           className="installButton installButton--primary"
                           href={guidePrimaryUrl}
+                          target={installGuidePlatform === "windows" ? "_blank" : undefined}
+                          rel={installGuidePlatform === "windows" ? "noreferrer" : undefined}
                           onClick={() =>
                             void trackEvent("app_download_clicked", {
                               platform: installGuidePlatform,
@@ -2625,8 +2733,12 @@ function App() {
                           }
                         >
                           {guidePrimaryLabel}
-                        </a>
-                        {installGuidePlatform === "mac" ? (
+                        </a> : (
+                          <button className="installButton" type="button" disabled>
+                            Not available yet
+                          </button>
+                        )}
+                        {installGuidePlatform === "mac" && macAppZipUrl ? (
                           <a
                             className="installButton"
                             href={macAppZipUrl}
@@ -2642,7 +2754,7 @@ function App() {
                         ) : null}
                         <a
                           className="installLink"
-                          href={GITHUB_BETA_RELEASE_URL}
+                          href={GITHUB_RELEASE_URL}
                           target="_blank"
                           rel="noreferrer"
                         >
@@ -2688,95 +2800,6 @@ function App() {
                     )}
                   </div>
                 </div>
-
-                <details className="installGuideAdvanced">
-                  <summary>Need advanced install tools?</summary>
-                  <div className="installGuideAdvancedBody">
-                    <div className="installSteps">
-                      Fallback scripts clone the public runAlert repo and run
-                      the watcher directly. Keep them for advanced testing only.
-                    </div>
-                    <div className="installCommandRow">
-                      <button
-                        className="installCopy"
-                        type="button"
-                        onClick={() => {
-                          void trackEvent("app_download_clicked", {
-                            platform: "mac",
-                            action: "copy_command",
-                          });
-                          copyInstallCommand(macInstallCommand, "mac");
-                        }}
-                      >
-                        {installCopied === "mac"
-                          ? "Copied"
-                          : "Copy macOS command"}
-                      </button>
-                      <span className="installCommandHint">
-                        Bash installer (macOS)
-                      </span>
-                    </div>
-                    <div className="installCommand">{macInstallCommand}</div>
-                    <div className="installCommandRow">
-                      <button
-                        className="installCopy"
-                        type="button"
-                        onClick={() => {
-                          void trackEvent("app_download_clicked", {
-                            platform: "windows",
-                            action: "copy_command",
-                          });
-                          copyInstallCommand(windowsInstallCommand, "windows");
-                        }}
-                      >
-                        {installCopied === "windows"
-                          ? "Copied"
-                          : "Copy Windows command"}
-                      </button>
-                      <span className="installCommandHint">
-                        PowerShell installer (Windows)
-                      </span>
-                    </div>
-                    <div className="installCommand">{windowsInstallCommand}</div>
-                    <div className="installGuideAdvancedLinks">
-                      <a
-                        className="installLink"
-                        href={macViewInstallUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        View macOS watcher script
-                      </a>
-                      <a
-                        className="installLink"
-                        href={windowsViewInstallUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        View Windows watcher script
-                      </a>
-                    </div>
-                    <div className="installTestRow">
-                      <button
-                        className="installTest"
-                        type="button"
-                        onClick={sendTestNotification}
-                        disabled={testStatus === "sending"}
-                      >
-                        {testStatus === "sending"
-                          ? "Sending…"
-                          : "Send test notification"}
-                      </button>
-                      <span className="installTestHint">
-                        {testStatus === "success"
-                          ? "Sent! Check your desktop notifications."
-                          : testStatus === "error"
-                            ? "No agent detected yet."
-                            : "Use this after install to verify it works."}
-                      </span>
-                    </div>
-                  </div>
-                </details>
               </div>
             </div>
           </div>
@@ -2841,7 +2864,154 @@ function App() {
                     Background Monitoring
                   </button>
                 ) : null}
+                <button
+                  className="settingsMenuBtn"
+                  onClick={() => {
+                    setShowSettings(false);
+                    setShowSyncSettings(true);
+                    setPairingError(null);
+                  }}
+                >
+                  Sync &amp; Backup
+                </button>
               </div>
+            </div>
+          </div>
+        ) : null}
+
+        {showSyncSettings ? (
+          <div
+            className="qhOverlay settingsSubOverlay"
+            onClick={() => setShowSyncSettings(false)}
+          >
+            <div
+              className="qhModal qhModal--sm"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+              aria-label="Sync and backup"
+            >
+              <div className="settingsSubHeader">
+                <button
+                  type="button"
+                  className="settingsBackBtn"
+                  onClick={() => {
+                    setShowSyncSettings(false);
+                    setShowSettings(true);
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M10 3.5L5.5 8L10 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Settings
+                </button>
+                <button
+                  type="button"
+                  className="iconBtn iconBtn--close"
+                  aria-label="Close sync and backup"
+                  onClick={() => setShowSyncSettings(false)}
+                >
+                  <svg className="iconSvg close" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"/>
+                  </svg>
+                </button>
+              </div>
+              <div className="settingsSubTitle">Sync &amp; Backup</div>
+              <div className="settingsSubHelp">
+                Your anonymous settings sync across paired devices. No account or email required.
+              </div>
+
+              <section className="syncSection" aria-labelledby="pair-device-title">
+                <h3 id="pair-device-title">
+                  {desktopApp ? "Pair this desktop" : "Pair a desktop app"}
+                </h3>
+                {desktopApp ? (
+                  <>
+                    <p>On runalert.app, create a pairing link and open it on this computer.</p>
+                    {pairingStatus === "paired" ? (
+                      <div className="syncSuccess" role="status">Paired. Your synced settings are ready.</div>
+                    ) : null}
+                    <details className="syncTroubleshooting">
+                      <summary>Pair with a manual code</summary>
+                      <label className="syncCodeLabel" htmlFor="pairing-code">Pairing code</label>
+                      <div className="syncCodeRow">
+                        <input
+                          id="pairing-code"
+                          value={pairingCode}
+                          inputMode="text"
+                          autoCapitalize="characters"
+                          autoComplete="off"
+                          placeholder="ABCD-EFGH"
+                          onChange={(event) => setPairingCode(event.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="installButton installButton--primary"
+                          disabled={pairingStatus === "working"}
+                          onClick={() => void pairDesktopManually()}
+                        >
+                          {pairingStatus === "working" ? "Pairing…" : "Pair"}
+                        </button>
+                      </div>
+                    </details>
+                  </>
+                ) : (
+                  <>
+                    <p>Create a one-time link that expires in ten minutes.</p>
+                    {!pairingLink ? (
+                      <button
+                        type="button"
+                        className="installButton installButton--primary"
+                        disabled={pairingStatus === "working"}
+                        onClick={() => void generatePairingLink()}
+                      >
+                        {pairingStatus === "working" ? "Creating…" : "Create pairing link"}
+                      </button>
+                    ) : (
+                      <div className="pairingResult">
+                        <a className="installButton installButton--primary" href={pairingLink.deepLink}>
+                          Open runAlert and pair
+                        </a>
+                        <span>Expires {new Date(pairingLink.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                        <details className="syncTroubleshooting">
+                          <summary>Desktop app did not open?</summary>
+                          <p>Enter this one-time code in the desktop app:</p>
+                          <code>{pairingLink.code}</code>
+                        </details>
+                      </div>
+                    )}
+                  </>
+                )}
+                {pairingError ? <div className="qhError" role="alert">{pairingError}</div> : null}
+              </section>
+
+              <section className="syncSection" aria-labelledby="backup-title">
+                <h3 id="backup-title">Local recovery backup</h3>
+                <p>Export a JSON copy or import one you saved earlier.</p>
+                <div className="syncBackupActions">
+                  <button type="button" className="installButton" onClick={exportConfigBackup}>
+                    Export JSON
+                  </button>
+                  <button
+                    type="button"
+                    className="installButton"
+                    onClick={() => importInputRef.current?.click()}
+                  >
+                    Import JSON
+                  </button>
+                  <input
+                    ref={importInputRef}
+                    className="visuallyHidden"
+                    type="file"
+                    accept="application/json,.json"
+                    aria-label="Import runAlert config JSON"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void importConfigBackup(file);
+                    }}
+                  />
+                </div>
+                {importError ? <div className="qhError" role="alert">{importError}</div> : null}
+              </section>
             </div>
           </div>
         ) : null}
@@ -3153,7 +3323,6 @@ function App() {
                             if (validation.ok) {
                               void flushConfigNow((message) => {
                                 setQuietErr(message);
-                                restoreQuietDraftFromConfirmed();
                               });
                             }
                           }}
@@ -3182,7 +3351,6 @@ function App() {
                             if (validation.ok) {
                               void flushConfigNow((message) => {
                                 setQuietErr(message);
-                                restoreQuietDraftFromConfirmed();
                               });
                             }
                           }}
@@ -3206,7 +3374,6 @@ function App() {
                             if (validation.ok) {
                               void flushConfigNow((message) => {
                                 setQuietErr(message);
-                                restoreQuietDraftFromConfirmed();
                               });
                             }
                           }}
@@ -3240,7 +3407,6 @@ function App() {
                             if (validation.ok) {
                               void flushConfigNow((message) => {
                                 setQuietErr(message);
-                                restoreQuietDraftFromConfirmed();
                               });
                             }
                           }}
@@ -3269,7 +3435,6 @@ function App() {
                             if (validation.ok) {
                               void flushConfigNow((message) => {
                                 setQuietErr(message);
-                                restoreQuietDraftFromConfirmed();
                               });
                             }
                           }}
@@ -3293,7 +3458,6 @@ function App() {
                             if (validation.ok) {
                               void flushConfigNow((message) => {
                                 setQuietErr(message);
-                                restoreQuietDraftFromConfirmed();
                               });
                             }
                           }}
@@ -3351,7 +3515,6 @@ function App() {
                         setQuietErr(null);
                         const ok = await flushConfigNow((message) => {
                           setQuietErr(message);
-                          restoreQuietDraftFromConfirmed();
                         });
                         if (!ok) return;
                         if (quietSavedTimerRef.current) {
@@ -3535,57 +3698,6 @@ function App() {
                   }}
                 >
                   Remove
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {showCopyFallback ? (
-          <div className="qhOverlay" onClick={() => setShowCopyFallback(false)}>
-            <div
-              className="qhModal qhModal--sm"
-              onClick={(e) => e.stopPropagation()}
-              role="dialog"
-              aria-label={copyFallbackTitle}
-            >
-              <div className="qhHeader">
-                <div>
-                  <div className="qhTitle">{copyFallbackTitle}</div>
-                  <div className="qhHelp">
-                    Your browser blocked clipboard access. Copy the command below.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="iconBtn iconBtn--close"
-                  aria-label="Close copy command"
-                  onClick={() => setShowCopyFallback(false)}
-                >
-                  <svg
-                    className="iconSvg close"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fill="currentColor"
-                      d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 1 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z"
-                    />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="installCommand" style={{ marginTop: 12 }}>
-                {copyFallbackCommand}
-              </div>
-
-              <div className="promptActions">
-                <button
-                  type="button"
-                  className="modalBtn"
-                  onClick={() => setShowCopyFallback(false)}
-                >
-                  Close
                 </button>
               </div>
             </div>
