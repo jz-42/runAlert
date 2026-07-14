@@ -17,11 +17,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Use Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -35,6 +37,11 @@ jobs:
         continue-on-error: true
         run: npm test
 
+      - name: Scan current tree and full history for secrets
+        id: secrets
+        continue-on-error: true
+        run: npm run scan:secrets
+
       - name: Install dashboard deps
         run: npm ci
         working-directory: dashboard
@@ -45,6 +52,17 @@ jobs:
         run: npm test
         working-directory: dashboard
 
+      - name: Lint and build dashboard
+        id: build
+        continue-on-error: true
+        run: npm run lint && npm run build
+        working-directory: dashboard
+
+      - name: Audit production dependencies
+        id: dependencies
+        continue-on-error: true
+        run: npm run audit:production
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium firefox
         working-directory: dashboard
@@ -53,6 +71,12 @@ jobs:
         id: layout
         continue-on-error: true
         run: npm run test:layout
+        working-directory: dashboard
+
+      - name: Run dashboard accessibility checks
+        id: accessibility
+        continue-on-error: true
+        run: npm run test:a11y
         working-directory: dashboard
 
       - name: Write audit summary
@@ -66,14 +90,22 @@ jobs:
             echo "- Trigger: ${{ github.event_name }}"
             echo "- Commit: ${{ github.sha }}"
             echo "- Backend tests: ${{ steps.backend.outcome }}"
+            echo "- Secret scan: ${{ steps.secrets.outcome }}"
             echo "- Dashboard tests: ${{ steps.dashboard.outcome }}"
+            echo "- Lint/build: ${{ steps.build.outcome }}"
+            echo "- Production dependency audit: ${{ steps.dependencies.outcome }}"
             echo "- Layout tests: ${{ steps.layout.outcome }}"
+            echo "- Accessibility tests: ${{ steps.accessibility.outcome }}"
             echo
             echo "## Commands"
             echo
             echo "- \`npm test\`"
+            echo "- \`npm run scan:secrets\`"
             echo "- \`npm test\` (in \`dashboard/\`)"
+            echo "- \`npm run lint && npm run build\` (in \`dashboard/\`)"
+            echo "- \`npm run audit:production\`"
             echo "- \`npm run test:layout\` (in \`dashboard/\`)"
+            echo "- \`npm run test:a11y\` (in \`dashboard/\`)"
           } | tee .github/audit-artifacts/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload audit summary
@@ -96,7 +128,11 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.backend.outcome }}" != "success" ] || \
+             [ "${{ steps.secrets.outcome }}" != "success" ] || \
              [ "${{ steps.dashboard.outcome }}" != "success" ] || \
-             [ "${{ steps.layout.outcome }}" != "success" ]; then
+             [ "${{ steps.build.outcome }}" != "success" ] || \
+             [ "${{ steps.dependencies.outcome }}" != "success" ] || \
+             [ "${{ steps.layout.outcome }}" != "success" ] || \
+             [ "${{ steps.accessibility.outcome }}" != "success" ]; then
             exit 1
           fi

@@ -6,12 +6,13 @@ services:
     buildCommand: npm ci && npm --prefix dashboard ci && npm --prefix dashboard run build
     startCommand: npm run start:web
     healthCheckPath: /health
+    branch: main
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
-      - key: AGENT_REPO_URL
-        value: https://github.com/jz-42/runAlert.git
+      - key: NODE_VERSION
+        value: 24.17.0
       - key: TWITCH_CLIENT_ID
         sync: false
       - key: TWITCH_CLIENT_SECRET
@@ -22,7 +23,7 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: SUPABASE_CONFIG_TABLE
+      - key: RUNALERT_CREDENTIAL_PEPPER
         sync: false
       - key: VITE_POSTHOG_KEY
         sync: false
@@ -32,5 +33,7 @@ services:
         sync: false
       - key: RUNALERT_MAC_ZIP_URL
         sync: false
-      - key: RUNALERT_WINDOWS_EXE_URL
+      - key: RUNALERT_WINDOWS_STORE_URL
+        sync: false
+      - key: RUNALERT_RELEASE_PUBLISHED_AT
         sync: false

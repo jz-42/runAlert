@@ -21,7 +21,6 @@ async function startDesktopServices({
   return {
     apiUrl: localApi.url,
     configPath: localApi.configPath,
-    configDir: localApi.configDir,
     stop() {
       watcher.stop();
       localApi.server.close();

@@ -32,8 +32,17 @@ describe("analytics", () => {
     const { getDistinctId, trackEvent } = await import("./analytics");
     const firstId = getDistinctId();
 
+    window.history.replaceState(
+      {},
+      "",
+      "/settings?token=permanent-secret&exchange=pair-secret"
+    );
+
     const result = await trackEvent("streamer_added", {
       streamer: "xQcOW",
+      pairingCode: "ABCD-EFGH",
+      configToken: "permanent-secret",
+      surface: "browser",
       reason: undefined,
     });
 
@@ -47,8 +56,8 @@ describe("analytics", () => {
       api_key: "ph_test_key",
       event: "streamer_added",
       properties: {
-        streamer: "xQcOW",
-        $current_url: "http://localhost:3000/",
+        surface: "browser",
+        $current_url: "http://localhost:3000/settings",
         $lib: "runalert-web",
       },
     });
@@ -60,5 +69,8 @@ describe("analytics", () => {
     expect(window.localStorage.getItem("runalert-analytics-distinct-id")).toBe(
       firstId
     );
+    expect(String(body)).not.toContain("xQcOW");
+    expect(String(body)).not.toContain("ABCD-EFGH");
+    expect(String(body)).not.toContain("permanent-secret");
   });
 });

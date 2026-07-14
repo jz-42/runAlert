@@ -18,7 +18,6 @@ const {
 
 const fs = require("fs");
 const path = require("path");
-const childProcess = require("child_process");
 function resolveConfigPath(env = process.env) {
   return env.RUNALERT_CONFIG_PATH || path.join(__dirname, "../../config.json");
 }
@@ -28,212 +27,15 @@ function shouldStartApi(env = process.env) {
 }
 
 const CONFIG_PATH = resolveConfigPath();
-const REMOTE_CONFIG_URL = (process.env.REMOTE_CONFIG_URL || "").trim();
-const REMOTE_CONFIG_POLL_MS =
-  Number(process.env.REMOTE_CONFIG_POLL_MS) || 5_000;
-const AUTO_UPDATE_CHECK_MS =
-  Number(process.env.RUNALERT_AUTO_UPDATE_MS) || 6 * 60 * 60 * 1000;
 const ACTIVE_WINDOW_SEC = 15 * 60;
-let remoteConfig = null;
-let remoteConfigUpdatedAt = null;
-let autoUpdateInProgress = false;
-const DEFAULT_AGENT_CHANNEL = "stable";
 
 function loadCfg() {
-  if (REMOTE_CONFIG_URL && remoteConfig) {
-    return remoteConfig;
-  }
   const raw = fs.readFileSync(CONFIG_PATH, "utf8");
   return JSON.parse(raw);
 }
 
-function shouldAutoUpdate(cfg) {
-  return !!cfg?.agent?.autoUpdate;
-}
-
-function normalizeAgentChannel(value) {
-  const raw = String(value || "").trim().toLowerCase();
-  return raw === "beta" ? "beta" : "stable";
-}
-
-function getAgentChannel() {
-  return normalizeAgentChannel(process.env.RUNALERT_AGENT_CHANNEL);
-}
-
-function parseVersionTag(tag) {
-  const raw = String(tag || "").trim();
-  if (!raw) return null;
-
-  const stable = raw.match(/^v(\d+)\.(\d+)\.(\d+)$/);
-  if (stable) {
-    return {
-      tag: raw,
-      major: Number(stable[1]),
-      minor: Number(stable[2]),
-      patch: Number(stable[3]),
-      prerelease: null,
-    };
-  }
-
-  const beta = raw.match(/^v(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$/);
-  if (beta) {
-    return {
-      tag: raw,
-      major: Number(beta[1]),
-      minor: Number(beta[2]),
-      patch: Number(beta[3]),
-      prerelease: {
-        kind: "beta",
-        number: Number(beta[4]),
-      },
-    };
-  }
-
-  return null;
-}
-
-function compareParsedTagVersions(a, b) {
-  if (!a && !b) return 0;
-  if (!a) return -1;
-  if (!b) return 1;
-  if (a.major !== b.major) return a.major - b.major;
-  if (a.minor !== b.minor) return a.minor - b.minor;
-  if (a.patch !== b.patch) return a.patch - b.patch;
-
-  // Stable releases sort above prereleases for the same X.Y.Z.
-  const aStable = a.prerelease == null;
-  const bStable = b.prerelease == null;
-  if (aStable !== bStable) return aStable ? 1 : -1;
-  if (aStable && bStable) return 0;
-
-  // Currently we only support "beta.N" prereleases.
-  const aKind = a.prerelease?.kind || "";
-  const bKind = b.prerelease?.kind || "";
-  if (aKind !== bKind) return aKind.localeCompare(bKind);
-
-  const aNum = Number(a.prerelease?.number || 0);
-  const bNum = Number(b.prerelease?.number || 0);
-  return aNum - bNum;
-}
-
-function pickLatestTagForChannel(tags, channel = DEFAULT_AGENT_CHANNEL) {
-  const normalizedChannel = normalizeAgentChannel(channel);
-  const parsed = (tags || []).map(parseVersionTag).filter(Boolean);
-  const allowed = parsed.filter((v) =>
-    normalizedChannel === "beta" ? true : v.prerelease == null
-  );
-  if (!allowed.length) return null;
-  allowed.sort(compareParsedTagVersions);
-  return allowed[allowed.length - 1].tag;
-}
-
-function shouldUpdateToTag(currentTag, targetTag) {
-  const target = parseVersionTag(targetTag);
-  if (!target) return false;
-  const current = parseVersionTag(currentTag);
-  if (!current) return true;
-  return compareParsedTagVersions(current, target) < 0;
-}
-
-function repoIsGit() {
-  const gitDir = path.join(__dirname, "../../.git");
-  return fs.existsSync(gitDir);
-}
-
-function hasOriginRemote() {
-  try {
-    childProcess.execSync("git remote get-url origin", { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function fetchRemoteTags() {
-  childProcess.execSync("git fetch --tags origin", { stdio: "pipe" });
-}
-
-function listLocalTags() {
-  const output = childProcess
-    .execSync("git tag --list", { stdio: "pipe" })
-    .toString();
-  return output
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function getCurrentExactTag() {
-  try {
-    const output = childProcess.execSync("git describe --tags --exact-match", {
-      stdio: "pipe",
-    })
-      .toString()
-      .trim();
-    return output || null;
-  } catch {
-    return null;
-  }
-}
-
-function checkoutTagDetached(tag) {
-  childProcess.execSync(`git checkout --detach ${tag}`, { stdio: "pipe" });
-}
-
-function maybeAutoUpdateOnce(cfg) {
-  if (autoUpdateInProgress) return;
-  if (!shouldAutoUpdate(cfg)) return;
-  if (!repoIsGit()) {
-    if (DEBUG) console.log("[update] skipping (not a git repo)");
-    return;
-  }
-  if (!hasOriginRemote()) {
-    if (DEBUG) console.log("[update] skipping (no origin remote configured)");
-    return;
-  }
-  autoUpdateInProgress = true;
-  try {
-    const channel = getAgentChannel();
-    fetchRemoteTags();
-    const latestTag = pickLatestTagForChannel(listLocalTags(), channel);
-    if (!latestTag) {
-      if (DEBUG)
-        console.log(
-          `[update] no eligible release tags found for channel=${channel}`
-        );
-      return;
-    }
-
-    const currentTag = getCurrentExactTag();
-    if (!shouldUpdateToTag(currentTag, latestTag)) {
-      if (DEBUG)
-        console.log(
-          `[update] already on latest eligible tag (${currentTag || "unknown"})`
-        );
-      return;
-    }
-
-    console.log(
-      `[update] switching from ${currentTag || "unversioned"} to ${latestTag} (channel=${channel})...`
-    );
-    checkoutTagDetached(latestTag);
-
-    try {
-      childProcess.execSync("npm install --production", { stdio: "inherit" });
-    } catch (e) {
-      console.warn("[update] npm install failed:", e?.message || e);
-    }
-    console.log("[update] restarting to apply updates...");
-    setTimeout(() => process.exit(0), 500);
-  } catch (e) {
-    console.warn("[update] auto-update failed:", e?.message || e);
-  } finally {
-    autoUpdateInProgress = false;
-  }
-}
-
 function buildMilestones(cfg) {
-  const STREAMERS = cfg.streamers?.length ? cfg.streamers : ["xQc"];
+  const STREAMERS = Array.isArray(cfg.streamers) ? cfg.streamers : [];
   const DEFAULT_MILESTONES = cfg.defaultMilestones || {
     nether: { thresholdSec: 240, enabled: true },
   };
@@ -293,39 +95,6 @@ const {
   milestoneEmoji,
   formatNotificationTitle,
 } = require("./notification_format");
-
-async function fetchRemoteConfigOnce() {
-  if (!REMOTE_CONFIG_URL) return false;
-  if (typeof fetch !== "function") {
-    console.warn(
-      "[warn] REMOTE_CONFIG_URL set but global fetch is unavailable; using local config.json"
-    );
-    return false;
-  }
-
-  try {
-    const res = await fetch(REMOTE_CONFIG_URL);
-    if (!res.ok) {
-      throw new Error(`GET ${REMOTE_CONFIG_URL} ${res.status}`);
-    }
-    const json = await res.json();
-    if (!json || typeof json !== "object") {
-      throw new Error("remote config JSON is not an object");
-    }
-    remoteConfig = json;
-    remoteConfigUpdatedAt = Date.now();
-    if (DEBUG) {
-      console.log(
-        "[config] remote config synced",
-        new Date(remoteConfigUpdatedAt).toISOString()
-      );
-    }
-    return true;
-  } catch (e) {
-    console.warn("[warn] remote config fetch failed:", e?.message || e);
-    return false;
-  }
-}
 
 function validateConfig(cfg, STREAMERS, DEFAULT_MILESTONES) {
   let ok = true;
@@ -534,13 +303,6 @@ function printConfigSummary(
 
 function getClocks() {
   const cfg = loadCfg();
-  if (process.env.NODE_ENV !== "test") {
-    maybeAutoUpdateOnce(cfg);
-    setInterval(() => {
-      const nextCfg = loadCfg();
-      maybeAutoUpdateOnce(nextCfg);
-    }, AUTO_UPDATE_CHECK_MS);
-  }
   const primary = (cfg.clock || "IGT").toUpperCase();
   const fallback = primary === "IGT" ? "RTA" : "IGT";
   return { primary, fallback };
@@ -884,14 +646,6 @@ async function loopStreamer(streamer, isActive = () => true) {
 }
 
 async function main() {
-  if (REMOTE_CONFIG_URL) {
-    if (DEBUG) {
-      console.log("[config] using remote config:", REMOTE_CONFIG_URL);
-    }
-    await fetchRemoteConfigOnce();
-    setInterval(fetchRemoteConfigOnce, REMOTE_CONFIG_POLL_MS);
-  }
-
   const cfg = loadCfg();
   const { STREAMERS, DEFAULT_MILESTONES, STREAMER_MILESTONES } =
     buildMilestones(cfg);
@@ -1013,12 +767,6 @@ module.exports = {
   getSplitWithLiveFallback,
   getNotificationPrefs,
   shouldNotifyMilestone,
-  normalizeAgentChannel,
-  parseVersionTag,
-  compareParsedTagVersions,
-  pickLatestTagForChannel,
-  shouldUpdateToTag,
-  maybeAutoUpdateOnce,
   // Exported for tests + other modules that want consistent formatting.
   msToMMSS,
   milestonePrettyLabel,

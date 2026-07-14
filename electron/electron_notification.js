@@ -1,4 +1,5 @@
 const path = require("path");
+const { isAllowedExternalUrl } = require("./navigation_policy");
 
 function resolveNotificationIconPath(baseDir = __dirname) {
   const packagedIcon = path.join(process.resourcesPath || "", "icon.icns");
@@ -22,6 +23,7 @@ async function sendElectronDesktop({
   const { Notification, shell } = require("electron");
   const Notifier = NotificationImpl || Notification;
   const shellApi = shellImpl || shell;
+  const safeOpenUrl = isAllowedExternalUrl(openUrl) ? String(openUrl) : null;
 
   if (!Notifier || typeof Notifier.isSupported === "function" && !Notifier.isSupported()) {
     return false;
@@ -32,13 +34,13 @@ async function sendElectronDesktop({
     body: String(message || ""),
     silent: !sound,
     icon: iconPath,
-    actions: openUrl ? [{ type: "button", text: "Open Stream" }] : [],
-    closeButtonText: openUrl ? "Dismiss" : undefined,
+    actions: safeOpenUrl ? [{ type: "button", text: "Open Stream" }] : [],
+    closeButtonText: safeOpenUrl ? "Dismiss" : undefined,
   });
 
-  if (openUrl) {
+  if (safeOpenUrl) {
     const openTarget = () => {
-      shellApi.openExternal(String(openUrl));
+      shellApi.openExternal(safeOpenUrl);
     };
     notification.on("click", () => {
       openTarget();

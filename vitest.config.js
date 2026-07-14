@@ -8,12 +8,7 @@ module.exports = {
     environment: "node",
     restoreMocks: true,
     clearMocks: true,
-    // Cursor sandbox + Node 22 occasionally causes tinypool to crash when terminating workers.
-    // Force a single-threaded pool so tests run deterministically in constrained environments.
-    pool: "threads",
-    poolOptions: {
-      threads: { singleThread: true },
-    },
+    // Keep the suite deterministic and lightweight in local worktrees and CI.
     maxWorkers: 1,
   },
 };

@@ -25,6 +25,7 @@ import {
 } from "@testing-library/react";
 
 import { trackEvent } from "./analytics";
+import { __resetApiTestState } from "./api";
 import App from "./App";
 
 vi.mock("./analytics", () => ({
@@ -56,6 +57,13 @@ function makeJsonResponse(json: any, ok = true, status = ok ? 200 : 500) {
   };
 }
 
+function configFromRequestBody(body: BodyInit | null | undefined) {
+  const parsed = JSON.parse(String(body || "{}"));
+  return parsed?.config && typeof parsed.config === "object"
+    ? parsed.config
+    : parsed;
+}
+
 function createDeferredResponse() {
   let resolve!: (value: any) => void;
   const promise = new Promise<any>((r) => {
@@ -64,11 +72,36 @@ function createDeferredResponse() {
   return { promise, resolve };
 }
 
+const V1_CONFIG = {
+  streamers: [] as string[],
+  clock: "IGT",
+  quietHours: [] as string[],
+  notifications: { enabled: true, sound: true },
+  agent: { autoUpdate: true, backgroundMonitoring: false },
+  channels: ["desktop"],
+  defaultMilestones: {
+    nether: { thresholdSec: 240, enabled: true },
+    bastion: { thresholdSec: 360, enabled: true },
+    fortress: { thresholdSec: 540, enabled: true },
+    first_portal: { thresholdSec: 720, enabled: true },
+    stronghold: { thresholdSec: 825, enabled: true },
+    end: { thresholdSec: 840, enabled: true },
+    finish: { thresholdSec: 900, enabled: true },
+  },
+  profiles: {},
+};
+
 describe("App", () => {
   beforeEach(() => {
     // Reset mocks between tests so calls don’t bleed across test cases.
     vi.restoreAllMocks();
+    __resetApiTestState();
     delete (window as any).runAlertDesktop;
+    window.localStorage.setItem(
+      "runalert-device-credential-v1",
+      "ra1_component-test-credential"
+    );
+    window.localStorage.removeItem("runalert-pending-config-v1");
   });
 
   afterEach(() => {
@@ -146,10 +179,10 @@ describe("App", () => {
     expect(screen.getByText("Browser Alerts")).toBeTruthy();
     expect(screen.getByText("Desktop app")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Download Mac Beta" })
+      screen.getByRole("button", { name: "Mac app coming soon" })
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Download Windows Beta" })
+      screen.getByRole("button", { name: "Windows app coming soon" })
     ).toBeTruthy();
     expect(
       screen.queryByRole("dialog", { name: "Install help" })
@@ -202,13 +235,14 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("xQcOW");
 
-    fireEvent.click(screen.getByRole("button", { name: "Download Mac Beta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mac app coming soon" }));
 
     expect(await screen.findByRole("dialog", { name: "Install help" })).toBeTruthy();
     expect(screen.getByText("Install runAlert on Mac")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Download DMG" }).getAttribute("href")).toBe(
-      "/download/macos/dmg"
-    );
+    expect(
+      (screen.getByRole("button", { name: "Not available yet" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
   });
 
   it("describes the signed Mac install flow without Gatekeeper bypass advice", async () => {
@@ -227,7 +261,7 @@ describe("App", () => {
 
     render(<App />);
     await screen.findByText("xQcOW");
-    fireEvent.click(screen.getByRole("button", { name: "Download Mac Beta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mac app coming soon" }));
 
     expect(screen.getByText(/signed.*notarized by Apple/i)).toBeTruthy();
     expect(screen.queryByText(/preferred AI/i)).toBeNull();
@@ -257,13 +291,109 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("xQcOW");
 
-    fireEvent.click(screen.getByRole("button", { name: "Download Windows Beta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Windows app coming soon" }));
 
     expect(await screen.findByRole("dialog", { name: "Install help" })).toBeTruthy();
     expect(screen.getByText("Install runAlert on Windows")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Download EXE" }).getAttribute("href")).toBe(
-      "/download/windows/exe"
-    );
+    expect(screen.getByText("Get runAlert from Microsoft Store")).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "Not available yet" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+  });
+
+  it("loads stable destinations and creates a one-time desktop pairing link", async () => {
+    const manifest = {
+      version: "1.0.0",
+      mac: {
+        available: true,
+        dmgUrl: "https://github.com/jz-42/runAlert/releases/download/v1.0.0/runAlert.dmg",
+        zipUrl: "https://github.com/jz-42/runAlert/releases/download/v1.0.0/runAlert.zip",
+        universal: true,
+      },
+      windows: {
+        available: true,
+        storeUrl: "https://apps.microsoft.com/detail/runalert",
+      },
+    };
+    const pairing = {
+      deepLink:
+        "runalert://pair?exchange=temporary_exchange_abcdefghijklmnopqrstuvwxyz",
+      code: "ABCD-EFGH",
+      expiresAt: "2026-07-14T18:10:00.000Z",
+    };
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      const value = String(url);
+      if (value.includes("/api/config/events")) {
+        return { ...makeJsonResponse({}), body: null };
+      }
+      if (value.includes("/api/releases/stable")) return makeJsonResponse(manifest);
+      if (value.includes("/api/pairing-links")) return makeJsonResponse(pairing, true, 201);
+      if (value.includes("/api/config") && !options?.method) {
+        return makeJsonResponse(V1_CONFIG);
+      }
+      if (value.includes("/profiles")) return makeJsonResponse({ profiles: {} });
+      if (value.includes("/status")) return makeJsonResponse({ statuses: {} });
+      return makeJsonResponse({ ok: true });
+    });
+
+    render(<App />);
+    expect(await screen.findByRole("button", { name: "Download Mac" })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Get from Microsoft Store" })
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("Open settings"));
+    fireEvent.click(await screen.findByRole("button", { name: "Sync & Backup" }));
+    const dialog = await screen.findByRole("dialog", { name: "Sync and backup" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create pairing link" }));
+
+    const deepLink = await within(dialog).findByRole("link", {
+      name: "Open runAlert and pair",
+    });
+    expect(deepLink.getAttribute("href")).toBe(pairing.deepLink);
+    expect(deepLink.getAttribute("href")).not.toContain("credential");
+    fireEvent.click(within(dialog).getByText("Desktop app did not open?"));
+    expect(within(dialog).getByText("ABCD-EFGH")).toBeTruthy();
+  });
+
+  it("imports a valid v1 JSON recovery backup through settings", async () => {
+    let savedConfig: any = null;
+    // @ts-expect-error - test mock
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      const value = String(url);
+      const method = String(options?.method || "GET").toUpperCase();
+      if (value.includes("/api/config/events")) {
+        return { ...makeJsonResponse({}), body: null };
+      }
+      if (value.includes("/api/releases/stable")) return makeJsonResponse({ version: "1.0.0" });
+      if (value.includes("/api/config") && method === "PUT") {
+        savedConfig = configFromRequestBody(options?.body);
+        return makeJsonResponse(savedConfig);
+      }
+      if (value.includes("/api/config")) return makeJsonResponse(V1_CONFIG);
+      if (value.includes("/profiles")) return makeJsonResponse({ profiles: {} });
+      if (value.includes("/status")) return makeJsonResponse({ statuses: {} });
+      return makeJsonResponse({ ok: true });
+    });
+    render(<App />);
+    await waitFor(() => expect(screen.queryByText("Loading config…")).toBeNull());
+    fireEvent.click(screen.getByLabelText("Open settings"));
+    fireEvent.click(await screen.findByRole("button", { name: "Sync & Backup" }));
+    const dialog = await screen.findByRole("dialog", { name: "Sync and backup" });
+    const imported = { ...structuredClone(V1_CONFIG), streamers: ["Feinberg"] };
+    const file = new File([JSON.stringify({ schemaVersion: 1, config: imported })], "backup.json", {
+      type: "application/json",
+    });
+    Object.defineProperty(file, "text", {
+      value: async () => JSON.stringify({ schemaVersion: 1, config: imported }),
+    });
+    fireEvent.change(within(dialog).getByLabelText("Import runAlert config JSON"), {
+      target: { files: [file] },
+    });
+
+    await waitFor(() => expect(savedConfig?.streamers).toEqual(["Feinberg"]));
   });
 
   it("persists desktop notification utility toggles through PUT /config", async () => {
@@ -298,7 +428,7 @@ describe("App", () => {
         return {
           ok: true,
           status: 200,
-          json: async () => JSON.parse(String(options?.body || "{}")),
+          json: async () => configFromRequestBody(options?.body),
         };
       }
 
@@ -340,7 +470,7 @@ describe("App", () => {
           String(url).includes("/config") && options?.method === "PUT"
       );
       expect(putCall).toBeTruthy();
-      expect(JSON.parse(String(putCall[1].body))).toMatchObject({
+      expect(configFromRequestBody(putCall[1].body)).toMatchObject({
         notifications: {
           enabled: true,
           sound: false,
@@ -356,7 +486,7 @@ describe("App", () => {
           String(url).includes("/config") && options?.method === "PUT"
       );
       const lastPut = putCalls[putCalls.length - 1];
-      expect(JSON.parse(String(lastPut[1].body))).toMatchObject({
+      expect(configFromRequestBody(lastPut[1].body)).toMatchObject({
         notifications: {
           enabled: false,
           sound: false,
@@ -390,11 +520,11 @@ describe("App", () => {
         return Promise.resolve(makeJsonResponse(initialConfig));
       }
       if (u.includes("/config") && method === "PUT" && putBodies.length === 0) {
-        putBodies.push(JSON.parse(String(options?.body || "{}")));
+        putBodies.push(configFromRequestBody(options?.body));
         return firstSave.promise;
       }
       if (u.includes("/config") && method === "PUT" && putBodies.length === 1) {
-        putBodies.push(JSON.parse(String(options?.body || "{}")));
+        putBodies.push(configFromRequestBody(options?.body));
         return secondSave.promise;
       }
       if (u.includes("/profiles")) {
@@ -674,7 +804,7 @@ describe("App", () => {
         return {
           ok: true,
           status: 200,
-          json: async () => JSON.parse(String(options?.body || "{}")),
+          json: async () => configFromRequestBody(options?.body),
         };
       }
 
@@ -719,7 +849,7 @@ describe("App", () => {
           String(url).includes("/config") && options?.method === "PUT"
       );
       expect(putCall).toBeTruthy();
-      expect(JSON.parse(String(putCall[1].body))).toMatchObject({
+      expect(configFromRequestBody(putCall[1].body)).toMatchObject({
         agent: {
           autoUpdate: false,
           backgroundMonitoring: true,
@@ -767,7 +897,7 @@ describe("App", () => {
       }
 
       if (u.includes("/config") && method === "PUT") {
-        return makeJsonResponse(JSON.parse(String(options?.body || "{}")));
+        return makeJsonResponse(configFromRequestBody(options?.body));
       }
 
       if (u.includes("/profiles")) {
@@ -804,7 +934,7 @@ describe("App", () => {
           String(url).includes("/config") && options?.method === "PUT"
       );
       const lastPut = putCalls[putCalls.length - 1];
-      expect(JSON.parse(String(lastPut[1].body))).toMatchObject({
+      expect(configFromRequestBody(lastPut[1].body)).toMatchObject({
         agent: {
           autoUpdate: true,
           backgroundMonitoring: true,
@@ -845,7 +975,7 @@ describe("App", () => {
         return {
           ok: true,
           status: 200,
-          json: async () => JSON.parse(String(options?.body || "{}")),
+          json: async () => configFromRequestBody(options?.body),
         };
       }
 
@@ -896,12 +1026,12 @@ describe("App", () => {
           String(url).includes("/config") && options?.method === "PUT"
       );
       expect(putCall).toBeTruthy();
-      expect(JSON.parse(String(putCall[1].body))).toMatchObject({
+      expect(configFromRequestBody(putCall[1].body)).toMatchObject({
         agent: {
           autoUpdate: true,
         },
       });
-      expect(JSON.parse(String(putCall[1].body)).agent).not.toHaveProperty(
+      expect(configFromRequestBody(putCall[1].body).agent).not.toHaveProperty(
         "forsenOcr"
       );
     });
@@ -1130,7 +1260,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -1380,7 +1510,7 @@ describe("App", () => {
     expect(screen.queryByText("forsen")).toBeNull();
   });
 
-  it("rolls back add streamer optimistic UI on save failure", async () => {
+  it("keeps an added streamer queued locally on save failure", async () => {
     const initialCfg = {
       streamers: ["xQcOW"],
       clock: "IGT",
@@ -1389,7 +1519,7 @@ describe("App", () => {
       profiles: {},
     };
 
-    // Defer the PUT so the optimistic tile is observable before rollback.
+    // Defer the PUT so the optimistic tile is observable before the offline state.
     const deferredPut = createDeferredResponse();
     // @ts-expect-error - test mock
     globalThis.fetch = vi.fn(async (url: string, init?: any) => {
@@ -1422,13 +1552,12 @@ describe("App", () => {
     expect(await screen.findByText("forsen")).toBeTruthy();
     deferredPut.resolve(makeJsonResponse({ ok: false }, false, 500));
 
-    await waitFor(() => {
-      expect(screen.queryByText("forsen")).toBeNull();
-    });
-    expect(await screen.findByText("PUT /config 500")).toBeTruthy();
+    expect(await screen.findByText("forsen")).toBeTruthy();
+    expect(await screen.findByText("PUT /api/config 500")).toBeTruthy();
+    expect(await screen.findByText(/Offline — changes are saved/i)).toBeTruthy();
   });
 
-  it("rolls back remove streamer optimistic UI on save failure", async () => {
+  it("keeps a removed streamer queued locally on save failure", async () => {
     const initialCfg = {
       streamers: ["xQcOW", "forsen"],
       clock: "IGT",
@@ -1466,10 +1595,9 @@ describe("App", () => {
     const dialog = await screen.findByRole("dialog", { name: "Remove streamer" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
 
-    await waitFor(() => {
-      expect(screen.queryAllByText("forsen").length).toBeGreaterThan(0);
-    });
-    expect(await screen.findByText("PUT /config 500")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("forsen")).toBeNull());
+    expect(await screen.findByText("PUT /api/config 500")).toBeTruthy();
+    expect(await screen.findByText(/Offline — changes are saved/i)).toBeTruthy();
   });
 
   // Test: clicking the header Quiet Hours pill opens the Quiet Hours modal
@@ -1512,7 +1640,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -1630,7 +1758,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(String(init?.body || "{}"));
+        savedCfg = configFromRequestBody(init?.body);
         return makeJsonResponse({ ok: true });
       }
       if (u.includes("/config") && method === "GET") {
@@ -1652,7 +1780,7 @@ describe("App", () => {
     });
   });
 
-  it("reverts quiet-hours edits to the last confirmed state on save failure", async () => {
+  it("keeps quiet-hours edits queued locally on save failure", async () => {
     const initialCfg: any = {
       streamers: ["xQcOW"],
       clock: "IGT",
@@ -1682,12 +1810,13 @@ describe("App", () => {
     fireEvent.change(startMinute, { target: { value: "45" } });
     fireEvent.blur(startMinute);
 
-    expect(await screen.findByText("PUT /config 500")).toBeTruthy();
+    expect(await screen.findByText("PUT /api/config 500")).toBeTruthy();
     await waitFor(() => {
       expect((screen.getByLabelText("quiet-0-start-minute") as HTMLInputElement).value).toBe(
-        "30"
+        "45"
       );
     });
+    expect(await screen.findByText(/Offline — changes are saved/i)).toBeTruthy();
   });
 
   it("shows brief Saved feedback only when the quiet-hours Save button is clicked", async () => {
@@ -1706,7 +1835,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(String(init?.body || "{}"));
+        savedCfg = configFromRequestBody(init?.body);
         return makeJsonResponse({ ok: true });
       }
       if (u.includes("/config") && method === "GET") {
@@ -1768,6 +1897,7 @@ describe("App", () => {
       name: /\+ Add quiet period/i,
     });
     fireEvent.click(addBtn);
+    await waitFor(() => expect(putCalls).toBe(1));
     const putCallsAfterAdd = putCalls;
 
     // Set start=end 9:00 AM -> 9:00 AM
@@ -1830,6 +1960,7 @@ describe("App", () => {
       name: /\+ Add quiet period/i,
     });
     fireEvent.click(addBtn);
+    await waitFor(() => expect(putCalls).toBe(1));
     const putCallsAfterAdd = putCalls;
 
     // Test incomplete: missing minute
@@ -1874,7 +2005,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -1961,7 +2092,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -2024,7 +2155,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -2108,7 +2239,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -2160,7 +2291,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(String(init?.body || "{}"));
+        savedCfg = configFromRequestBody(init?.body);
         return makeJsonResponse({ ok: true });
       }
       if (u.includes("/config") && method === "GET") {
@@ -2207,7 +2338,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(String(init?.body || "{}"));
+        savedCfg = configFromRequestBody(init?.body);
         return makeJsonResponse({ ok: true });
       }
       if (u.includes("/config") && method === "GET") {
@@ -2259,7 +2390,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(String(init?.body || "{}"));
+        savedCfg = configFromRequestBody(init?.body);
         return makeJsonResponse({ ok: true });
       }
       if (u.includes("/config") && method === "GET") {
@@ -2319,7 +2450,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -2419,7 +2550,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -2554,7 +2685,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -2610,7 +2741,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -2662,7 +2793,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -2725,7 +2856,7 @@ describe("App", () => {
       const u = String(url);
       const method = String(init?.method || "GET").toUpperCase();
       if (u.includes("/config") && method === "PUT") {
-        savedCfg = JSON.parse(init.body);
+        savedCfg = configFromRequestBody(init.body);
         return { ok: true, status: 200, json: async () => ({ ok: true }) };
       }
       if (u.includes("/config") && method === "GET") {
@@ -3068,7 +3199,7 @@ describe("App", () => {
           return { ok: true, status: 200, json: async () => state.cfg };
         }
         if (u.includes("/config") && method === "PUT") {
-          state.cfg = JSON.parse(String(options?.body || "{}"));
+          state.cfg = configFromRequestBody(options?.body);
           return { ok: true, status: 200, json: async () => state.cfg };
         }
         if (u.includes("/profiles")) {
@@ -3163,7 +3294,7 @@ describe("App", () => {
         );
         expect(putCalls.length).toBeGreaterThan(0);
         const lastPut = putCalls[putCalls.length - 1];
-        expect(JSON.parse(String(lastPut[1].body))).toMatchObject({
+        expect(configFromRequestBody(lastPut[1].body)).toMatchObject({
           notifications: { enabled: true },
         });
       });
@@ -3208,7 +3339,7 @@ describe("App", () => {
           String(url).includes("/config") && options?.method === "PUT"
       );
       const lastPut = putCalls[putCalls.length - 1];
-      expect(JSON.parse(String(lastPut[1].body))).toMatchObject({
+      expect(configFromRequestBody(lastPut[1].body)).toMatchObject({
         notifications: { enabled: true },
       });
     });
@@ -3236,7 +3367,7 @@ describe("App", () => {
         );
         expect(putCalls.length).toBeGreaterThan(0);
         const lastPut = putCalls[putCalls.length - 1];
-        expect(JSON.parse(String(lastPut[1].body))).toMatchObject({
+        expect(configFromRequestBody(lastPut[1].body)).toMatchObject({
           notifications: { enabled: false },
         });
       });
