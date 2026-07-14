@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "setup": "npm run workspace:setup",
+    "run": "npm run workspace:run"
+  },
+  "runScriptMode": "concurrent"
+}

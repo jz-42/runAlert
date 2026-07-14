@@ -1,33 +1,35 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+const devApiTarget = "http://127.0.0.1:8787";
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
       "/config": {
-        target: "https://minecraft-speedrun-notifier.onrender.com",
+        target: devApiTarget,
         changeOrigin: true,
       },
       "/notify": {
-        target: "https://minecraft-speedrun-notifier.onrender.com",
+        target: devApiTarget,
         changeOrigin: true,
       },
       "/profiles": {
-        target: "https://minecraft-speedrun-notifier.onrender.com",
+        target: devApiTarget,
         changeOrigin: true,
       },
       "/status": {
-        target: "https://minecraft-speedrun-notifier.onrender.com",
+        target: devApiTarget,
         changeOrigin: true,
       },
       "/paceman": {
-        target: "https://minecraft-speedrun-notifier.onrender.com",
+        target: devApiTarget,
         changeOrigin: true,
       },
-      "/install": {
-        target: "https://minecraft-speedrun-notifier.onrender.com",
+      "/install/": {
+        target: devApiTarget,
         changeOrigin: true,
       },
     },

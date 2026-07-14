@@ -230,6 +230,79 @@ describe("api/server", () => {
     else process.env.SUPABASE_CONFIG_TABLE = prevTable;
   });
 
+  it("PUT /config with token writes to Supabase automatically when env vars are present", async () => {
+    const originalFetch = global.fetch;
+    const prevStore = process.env.RUNALERT_CONFIG_STORE;
+    const prevUrl = process.env.SUPABASE_URL;
+    const prevKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const prevTable = process.env.SUPABASE_CONFIG_TABLE;
+
+    process.env.RUNALERT_CONFIG_STORE = "";
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+    process.env.SUPABASE_CONFIG_TABLE = "runalert_configs";
+
+    const next = {
+      streamers: ["xQcOW", "snoop"],
+      clock: "IGT",
+      quietHours: [],
+      defaultMilestones: {
+        nether: { thresholdSec: 240, enabled: true },
+      },
+      profiles: {},
+    };
+
+    global.fetch = vi.fn(async (url, options = {}) => {
+      const u = String(url);
+      if (u === "https://example.supabase.co/rest/v1/runalert_configs") {
+        expect(options.method).toBe("POST");
+        expect(options.headers).toMatchObject({
+          apikey: "service-key",
+          Authorization: "Bearer service-key",
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates",
+        });
+        expect(JSON.parse(String(options.body))).toEqual([
+          expect.objectContaining({
+            token: "supatest",
+            config: next,
+          }),
+        ]);
+        return {
+          ok: true,
+          json: async () => ({ ok: true }),
+        };
+      }
+      throw new Error(`Unexpected fetch: ${u}`);
+    });
+
+    const app = createApp({
+      configPath,
+      configDir,
+      notifySend: vi.fn(async () => {}),
+      paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
+    });
+
+    const r = await withLocalServer(app, (req) =>
+      req.put("/config?token=supatest").send(next)
+    );
+
+    expect(r.status).toBe(200);
+    expect(r.body.ok).toBe(true);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(fs.existsSync(path.join(configDir, "supatest.json"))).toBe(false);
+
+    global.fetch = originalFetch;
+    if (prevStore == null) delete process.env.RUNALERT_CONFIG_STORE;
+    else process.env.RUNALERT_CONFIG_STORE = prevStore;
+    if (prevUrl == null) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = prevUrl;
+    if (prevKey == null) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = prevKey;
+    if (prevTable == null) delete process.env.SUPABASE_CONFIG_TABLE;
+    else process.env.SUPABASE_CONFIG_TABLE = prevTable;
+  });
+
   // Test: PUT /config rejects too many streamers
   it("PUT /config rejects too many streamers", async () => {
     const app = createApp({

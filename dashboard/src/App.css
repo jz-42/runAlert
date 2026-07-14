@@ -111,7 +111,7 @@
   max-width: 1280px;
   width: 100%;
   margin: 0 auto;
-  padding: clamp(22px, 2.6vw, 34px) clamp(20px, 4vw, 52px) 72px;
+  padding: clamp(20px, 2.5vw, 32px) clamp(20px, 4vw, 52px) 72px;
   position: relative;
   z-index: 1;
 }
@@ -187,14 +187,13 @@ a.tag:hover{
   gap: 0;
 }
 
-.brandMark{
-  position: fixed;
-  top: clamp(8px, 1.4vw, 18px);
-  left: clamp(0px, 1vw, 12px);
-  width: clamp(114px, 10.5vw, 158px);
-  height: clamp(80px, 8vw, 114px);
-  z-index: 10;
-  pointer-events: none;
+.brandArtSlot{
+  position: relative;
+  width: clamp(130px, 12vw, 180px);
+  height: clamp(90px, 9vw, 130px);
+  flex: 0 0 auto;
+  overflow: visible;
+  margin-right: -8px;
 }
 
 .brandText{
@@ -227,7 +226,7 @@ a.tag:hover{
 
 @media (max-width: 900px){
   .titleDragon{ display: none; }
-  .brandMark{ display: none; }
+  .brandArtSlot{ display: none; }
 }
 
 .metaRow{
@@ -237,13 +236,6 @@ a.tag:hover{
   gap: 8px;
   position: relative;
   top: -2px;
-}
-
-.metaWarn{
-  color: rgba(255, 140, 140, 0.70);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
 }
 
 .pageVersion{
@@ -261,11 +253,13 @@ a.tag:hover{
 /* ── Pills / Tags ────────────────────────────────────────── */
 
 .utilityRow{
-  margin-top: 6px;
+  margin-top: 10px;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  justify-content: center;
+  align-self: stretch;
+  justify-content: flex-start;
+  transform: translateY(-2px);
 }
 
 .utilityCard{
@@ -487,7 +481,7 @@ a.tag:hover{
 /* ── Streamer Grid ───────────────────────────────────────── */
 
 .grid{
-  margin-top: 22px;
+  margin-top: 32px;
   display: grid;
   grid-template-columns: repeat(auto-fit, 160px);
   justify-content: center;
@@ -792,6 +786,13 @@ a.tag:hover{
   background: rgba(255,255,255,0.025);
   border: 1px solid rgba(255,255,255,0.05);
   white-space: nowrap;
+}
+
+.milestoneSubtitle--stale{
+  color: rgba(220, 224, 234, 0.22);
+  background: transparent;
+  border-color: rgba(255,255,255,0.03);
+  font-style: italic;
 }
 
 .milestoneLink{
@@ -2223,6 +2224,77 @@ a.tag:hover{
 }
 
 @media (max-width: 720px){
+  .frame{
+    box-sizing: border-box;
+    padding: 18px 14px 64px;
+  }
+
+  .titleRow{
+    padding-top: 44px;
+  }
+
+  .brandRow,
+  .brandText,
+  .titleLine{
+    width: 100%;
+    min-width: 0;
+  }
+
+  .titleLine{
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 0;
+  }
+
+  .appTitle{
+    width: 100%;
+    max-width: 100%;
+    font-size: clamp(24px, 8vw, 30px);
+    line-height: 1.12;
+  }
+
+  .settingsGear{
+    top: 14px;
+    right: 14px;
+    width: 38px;
+    height: 38px;
+  }
+
+  .utilityRow{
+    width: 100%;
+    justify-content: center;
+  }
+
+  .utilityCard{
+    flex: 1 1 150px;
+  }
+
+  .downloadHub{
+    width: 100%;
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .downloadHubHeader{
+    text-align: center;
+  }
+
+  .downloadHubActions{
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .downloadHubActions .installButton{
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
+  }
+
   .onboardingGrid,
   .helpGrid{
     grid-template-columns: 1fr;
