@@ -544,6 +544,9 @@ describe("api/server", () => {
   // Test: GET /status returns per-streamer isLive based on paceman world.isLive
   it("GET /status returns per-streamer isLive based on paceman world.isLive", async () => {
     // Beginner summary: dashboard polls this endpoint for tile indicators (active + last milestone).
+    vi.spyOn(global, "fetch").mockRejectedValue(
+      new Error("Twitch lookup disabled in API unit tests")
+    );
     const paceman = {
       getRecentRunId: vi
         .fn()
@@ -586,6 +589,9 @@ describe("api/server", () => {
     // Beginner summary: Paceman run-level isLive can go false; we still want the dot green if updates are recent.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-05T00:00:00.000Z"));
+    vi.spyOn(global, "fetch").mockRejectedValue(
+      new Error("Twitch lookup disabled in API unit tests")
+    );
     const nowSec = Math.floor(Date.now() / 1000);
 
     const paceman = {
@@ -621,6 +627,9 @@ describe("api/server", () => {
     // Beginner summary: if a runner finishes and instantly starts a new run, we still want to show Finish briefly.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-05T00:00:00.000Z"));
+    vi.spyOn(global, "fetch").mockRejectedValue(
+      new Error("Twitch lookup disabled in API unit tests")
+    );
     const nowSec = Math.floor(Date.now() / 1000);
 
     const paceman = {
