@@ -1,4 +1,9 @@
-export type SaveState = "clean" | "dirty" | "saving" | "error";
+export type SaveState = "clean" | "dirty" | "saving" | "offline" | "conflict";
+
+export interface ConfigConflict<T> {
+  localValue: T;
+  serverValue: T;
+}
 
 export interface ConfigPersistenceSnapshot<T> {
   confirmedValue: T;
@@ -6,6 +11,7 @@ export interface ConfigPersistenceSnapshot<T> {
   saveState: SaveState;
   errorMessage: string | null;
   dirty: boolean;
+  conflict: ConfigConflict<T> | null;
 }
 
 interface CreateConfigPersistenceOptions<T> {
@@ -23,6 +29,9 @@ export interface ConfigPersistenceController<T> {
   requestImmediateSave(): Promise<void>;
   flushNow(): Promise<void>;
   cancelDebounce(): void;
+  retrySave(): Promise<void>;
+  resolveConflictWithServer(): void;
+  resolveConflictKeepLocal(): Promise<void>;
   subscribe(listener: (snapshot: ConfigPersistenceSnapshot<T>) => void): () => void;
 }
 
@@ -34,6 +43,7 @@ export function createConfigPersistence<T>(
   let optimisticValue = options.initialValue;
   let saveState: SaveState = "clean";
   let errorMessage: string | null = null;
+  let conflict: ConfigConflict<T> | null = null;
   let dirty = false;
   let latestVersion = 0;
   let inFlightVersion = 0;
@@ -50,6 +60,7 @@ export function createConfigPersistence<T>(
       saveState,
       errorMessage,
       dirty,
+      conflict,
     };
   }
 
@@ -78,7 +89,14 @@ export function createConfigPersistence<T>(
   }
 
   function maybeStartSave() {
-    if (inFlight || !dirty) return;
+    if (
+      inFlight ||
+      !dirty ||
+      saveState === "offline" ||
+      saveState === "conflict"
+    ) {
+      return;
+    }
 
     const version = latestVersion;
     const valueToSave = optimisticValue;
@@ -96,16 +114,25 @@ export function createConfigPersistence<T>(
           dirty = false;
           saveState = "clean";
           errorMessage = null;
+          conflict = null;
         } else {
           saveState = "dirty";
         }
       })
       .catch((error) => {
         if (latestVersion === version) {
-          optimisticValue = confirmedValue;
-          dirty = false;
-          saveState = "error";
+          dirty = true;
           errorMessage = error?.message ?? String(error);
+          if (error && typeof error === "object" && "serverValue" in error) {
+            conflict = {
+              localValue: optimisticValue,
+              serverValue: error.serverValue as T,
+            };
+            saveState = "conflict";
+          } else {
+            conflict = null;
+            saveState = "offline";
+          }
         } else {
           saveState = "dirty";
         }
@@ -114,8 +141,32 @@ export function createConfigPersistence<T>(
         inFlight = false;
         inFlightPromise = null;
         emit();
-        if (dirty) maybeStartSave();
+        if (dirty && saveState === "dirty") maybeStartSave();
       });
+  }
+
+  async function saveUntilSettled({ retryOffline = true } = {}) {
+    cancelDebounce();
+    if (saveState === "conflict") {
+      throw new Error(errorMessage || "Synced settings conflict requires a choice.");
+    }
+    if (saveState === "offline" && retryOffline) {
+      saveState = "dirty";
+      errorMessage = null;
+      emit();
+    }
+    maybeStartSave();
+    while (inFlightPromise || (dirty && saveState === "dirty")) {
+      if (inFlightPromise) await inFlightPromise;
+      if (!inFlightPromise && dirty && saveState === "dirty") maybeStartSave();
+    }
+    if (
+      (saveState === "offline" || saveState === "conflict") &&
+      errorMessage
+    ) {
+      throw new Error(errorMessage);
+    }
+    await waitForIdle();
   }
 
   return {
@@ -128,6 +179,7 @@ export function createConfigPersistence<T>(
       saveState = "clean";
       errorMessage = null;
       dirty = false;
+      conflict = null;
       cancelDebounce();
       emit();
     },
@@ -138,7 +190,12 @@ export function createConfigPersistence<T>(
       optimisticValue = updater(optimisticValue);
       latestVersion += 1;
       dirty = true;
-      saveState = "dirty";
+      if (saveState === "conflict" && conflict) {
+        conflict = { ...conflict, localValue: optimisticValue };
+      } else {
+        saveState = "dirty";
+        conflict = null;
+      }
       errorMessage = null;
       emit();
     },
@@ -152,21 +209,32 @@ export function createConfigPersistence<T>(
       emit();
     },
     async requestImmediateSave() {
-      cancelDebounce();
-      maybeStartSave();
-      if (inFlightPromise) await inFlightPromise;
+      await saveUntilSettled();
     },
     async flushNow() {
-      cancelDebounce();
-      maybeStartSave();
-      while (inFlightPromise || dirty) {
-        if (inFlightPromise) await inFlightPromise;
-        if (!inFlightPromise && dirty) maybeStartSave();
-      }
-      await waitForIdle();
-      if (saveState === "error" && errorMessage) {
-        throw new Error(errorMessage);
-      }
+      await saveUntilSettled();
+    },
+    async retrySave() {
+      await saveUntilSettled();
+    },
+    resolveConflictWithServer() {
+      if (!conflict) return;
+      latestVersion += 1;
+      confirmedValue = conflict.serverValue;
+      optimisticValue = conflict.serverValue;
+      dirty = false;
+      saveState = "clean";
+      errorMessage = null;
+      conflict = null;
+      emit();
+    },
+    async resolveConflictKeepLocal() {
+      if (!conflict) return;
+      conflict = null;
+      saveState = "dirty";
+      errorMessage = null;
+      emit();
+      await saveUntilSettled({ retryOffline: false });
     },
     cancelDebounce,
     subscribe(listener) {

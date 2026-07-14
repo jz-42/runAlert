@@ -81,6 +81,7 @@ describe("api/server", () => {
     const app = createApp({
       configPath,
       configDir,
+      enableLocalConfig: true,
       notifySend: vi.fn(async () => {}),
       paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
     });
@@ -90,8 +91,7 @@ describe("api/server", () => {
     expect(r.body.streamers).toEqual(["xQcOW"]);
   });
 
-  // Test: GET /config with token creates a per-user config file
-  it("GET /config with token creates a per-user config file", async () => {
+  it("GET /config rejects retired query tokens", async () => {
     const app = createApp({
       configPath,
       configDir,
@@ -101,11 +101,11 @@ describe("api/server", () => {
 
     const token = "testtoken123";
     const r = await withLocalServer(app, (r) => r.get(`/config?token=${token}`));
-    expect(r.status).toBe(200);
-    expect(r.body.streamers).toEqual(["xQcOW"]);
+    expect(r.status).toBe(410);
+    expect(r.body.error).toBe("legacy_config_endpoint_retired");
 
     const tokenPath = path.join(configDir, `${token}.json`);
-    expect(fs.existsSync(tokenPath)).toBe(true);
+    expect(fs.existsSync(tokenPath)).toBe(false);
   });
 
   // Test: PUT /config validates and persists
@@ -114,6 +114,7 @@ describe("api/server", () => {
     const app = createApp({
       configPath,
       configDir,
+      enableLocalConfig: true,
       notifySend: vi.fn(async () => {}),
       paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
     });
@@ -133,8 +134,7 @@ describe("api/server", () => {
     expect(saved.streamers).toEqual(["xQcOW", "forsen"]);
   });
 
-  // Test: PUT /config with token writes to per-user file only
-  it("PUT /config with token writes to per-user file only", async () => {
+  it("PUT /config rejects retired query tokens", async () => {
     const app = createApp({
       configPath,
       configDir,
@@ -154,14 +154,13 @@ describe("api/server", () => {
     const r = await withLocalServer(app, (r) =>
       r.put(`/config?token=${token}`).send(next)
     );
-    expect(r.status).toBe(200);
+    expect(r.status).toBe(410);
 
     const base = JSON.parse(fs.readFileSync(configPath, "utf8"));
     expect(base.streamers).toEqual(["xQcOW"]);
 
     const tokenPath = path.join(configDir, `${token}.json`);
-    const saved = JSON.parse(fs.readFileSync(tokenPath, "utf8"));
-    expect(saved.streamers).toEqual(["xQcOW", "snoop"]);
+    expect(fs.existsSync(tokenPath)).toBe(false);
   });
 
   it("GET /config with token uses Supabase automatically when env vars are present", async () => {
@@ -214,9 +213,8 @@ describe("api/server", () => {
       req.get("/config?token=supatest")
     );
 
-    expect(r.status).toBe(200);
-    expect(r.body.streamers).toEqual(["Feinberg"]);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(r.status).toBe(410);
+    expect(global.fetch).toHaveBeenCalledTimes(0);
     expect(fs.existsSync(path.join(configDir, "supatest.json"))).toBe(false);
 
     global.fetch = originalFetch;
@@ -287,9 +285,8 @@ describe("api/server", () => {
       req.put("/config?token=supatest").send(next)
     );
 
-    expect(r.status).toBe(200);
-    expect(r.body.ok).toBe(true);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(r.status).toBe(410);
+    expect(global.fetch).toHaveBeenCalledTimes(0);
     expect(fs.existsSync(path.join(configDir, "supatest.json"))).toBe(false);
 
     global.fetch = originalFetch;
@@ -308,6 +305,7 @@ describe("api/server", () => {
     const app = createApp({
       configPath,
       configDir,
+      enableLocalConfig: true,
       notifySend: vi.fn(async () => {}),
       paceman: { getRecentRunId: vi.fn(), getWorld: vi.fn() },
     });
@@ -376,8 +374,7 @@ describe("api/server", () => {
     });
   });
 
-  // Test: GET /install/macos.command includes tokenized config URL + channel env
-  it("GET /install/macos.command includes tokenized config URL + channel env", async () => {
+  it("retires the tokenized macOS script installer", async () => {
     const app = createApp({
       configPath,
       configDir,
@@ -390,16 +387,12 @@ describe("api/server", () => {
         .get("/install/macos.command?token=abc123&channel=beta&view=1")
         .set("host", "runalert.app")
     );
-    expect(r.status).toBe(200);
-    expect(r.text).toContain('REMOTE_CONFIG_URL="http://runalert.app/config?token=abc123"');
-    expect(r.text).toContain('RUNALERT_AGENT_CHANNEL="beta"');
-    expect(String(r.headers["content-disposition"] || "")).toContain(
-      'inline; filename="runalert-install.command"'
-    );
+    expect(r.status).toBe(410);
+    expect(r.body.error).toBe("legacy_installer_retired");
+    expect(JSON.stringify(r.body)).not.toContain("abc123");
   });
 
-  // Test: GET /install/windows.ps1 returns installer script with channel env
-  it("GET /install/windows.ps1 returns installer script with channel env", async () => {
+  it("retires the tokenized Windows script installer", async () => {
     const app = createApp({
       configPath,
       configDir,
@@ -412,16 +405,12 @@ describe("api/server", () => {
         .get("/install/windows.ps1?token=user42&channel=beta")
         .set("host", "runalert.app")
     );
-    expect(r.status).toBe(200);
-    expect(r.text).toContain('$RemoteConfigUrl = "http://runalert.app/config?token=user42"');
-    expect(r.text).toContain('$RunAlertAgentChannel = "beta"');
-    expect(r.text).toContain("pm2 start src/watcher/run_watcher.js --name runalert-watcher --update-env");
-    expect(String(r.headers["content-disposition"] || "")).toContain(
-      'attachment; filename="runalert-install.ps1"'
-    );
+    expect(r.status).toBe(410);
+    expect(r.body.error).toBe("legacy_installer_retired");
+    expect(JSON.stringify(r.body)).not.toContain("user42");
   });
 
-  it("GET /download/macos/dmg serves a local packaged app artifact", async () => {
+  it("retires local beta DMG downloads", async () => {
     const releaseDir = path.join(
       os.tmpdir(),
       `runalert-release-${Date.now()}-${Math.random()}`
@@ -443,14 +432,11 @@ describe("api/server", () => {
       req.get("/download/macos/dmg")
     );
 
-    expect(r.status).toBe(200);
-    expect(r.text).toBe("fake dmg");
-    expect(String(r.headers["content-disposition"] || "")).toContain(
-      'attachment; filename="runAlert-0.1.0-beta.2-arm64.dmg"'
-    );
+    expect(r.status).toBe(410);
+    expect(r.body.error).toBe("legacy_installer_retired");
   });
 
-  it("GET /download/macos/dmg redirects to configured release asset URL", async () => {
+  it("does not redirect retired DMG routes even when legacy env is set", async () => {
     const prev = process.env.RUNALERT_MAC_DMG_URL;
     process.env.RUNALERT_MAC_DMG_URL =
       "https://github.com/jz-42/runAlert/releases/download/v0.1.0-beta.2/runAlert-0.1.0-beta.2-arm64.dmg";
@@ -465,13 +451,13 @@ describe("api/server", () => {
       req.get("/download/macos/dmg")
     );
 
-    expect(r.status).toBe(302);
-    expect(r.headers.location).toBe(process.env.RUNALERT_MAC_DMG_URL);
+    expect(r.status).toBe(410);
+    expect(r.headers.location).toBeUndefined();
     if (prev == null) delete process.env.RUNALERT_MAC_DMG_URL;
     else process.env.RUNALERT_MAC_DMG_URL = prev;
   });
 
-  it("GET /download/windows/exe redirects to configured release asset URL", async () => {
+  it("does not redirect retired Windows EXE routes", async () => {
     const prev = process.env.RUNALERT_WINDOWS_EXE_URL;
     process.env.RUNALERT_WINDOWS_EXE_URL =
       "https://github.com/jz-42/runAlert/releases/download/v0.1.0-beta.2/runAlert-Setup-0.1.0-beta.2.exe";
@@ -486,8 +472,8 @@ describe("api/server", () => {
       req.get("/download/windows/exe")
     );
 
-    expect(r.status).toBe(302);
-    expect(r.headers.location).toBe(process.env.RUNALERT_WINDOWS_EXE_URL);
+    expect(r.status).toBe(410);
+    expect(r.headers.location).toBeUndefined();
     if (prev == null) delete process.env.RUNALERT_WINDOWS_EXE_URL;
     else process.env.RUNALERT_WINDOWS_EXE_URL = prev;
   });
@@ -558,6 +544,9 @@ describe("api/server", () => {
   // Test: GET /status returns per-streamer isLive based on paceman world.isLive
   it("GET /status returns per-streamer isLive based on paceman world.isLive", async () => {
     // Beginner summary: dashboard polls this endpoint for tile indicators (active + last milestone).
+    vi.spyOn(global, "fetch").mockRejectedValue(
+      new Error("Twitch lookup disabled in API unit tests")
+    );
     const paceman = {
       getRecentRunId: vi
         .fn()
@@ -600,6 +589,9 @@ describe("api/server", () => {
     // Beginner summary: Paceman run-level isLive can go false; we still want the dot green if updates are recent.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-05T00:00:00.000Z"));
+    vi.spyOn(global, "fetch").mockRejectedValue(
+      new Error("Twitch lookup disabled in API unit tests")
+    );
     const nowSec = Math.floor(Date.now() / 1000);
 
     const paceman = {
@@ -635,6 +627,9 @@ describe("api/server", () => {
     // Beginner summary: if a runner finishes and instantly starts a new run, we still want to show Finish briefly.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-05T00:00:00.000Z"));
+    vi.spyOn(global, "fetch").mockRejectedValue(
+      new Error("Twitch lookup disabled in API unit tests")
+    );
     const nowSec = Math.floor(Date.now() / 1000);
 
     const paceman = {

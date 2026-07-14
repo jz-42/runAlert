@@ -1,37 +1,40 @@
 {
   "name": "dashboard",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=24.17.0 <25"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "vitest run --pool=threads --poolOptions.threads.singleThread",
+    "test": "vitest run",
     "preview": "vite preview",
     "test:layout": "PW_PORT=4174 playwright test --grep @layout --project=chromium --project=firefox --pass-with-no-tests",
+    "test:a11y": "PW_PORT=4175 playwright test accessibility.pw.ts --project=chromium",
     "test:visual": "PW_PORT=4174 playwright test --grep @visual --project=chromium",
     "test:visual:update": "PW_PORT=4174 playwright test --grep @visual --project=chromium --update-snapshots"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^5.2.1",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "@playwright/test": "^1.57.0",
-    "@testing-library/react": "^16.1.0",
-    "@types/react": "^19.2.5",
+    "@axe-core/playwright": "^4.12.1",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.1",
-    "eslint": "^9.39.1",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
-    "globals": "^16.5.0",
-    "jsdom": "^25.0.1",
-    "vite": "^7.2.4",
-    "vitest": "^2.1.8"
+    "@vitejs/plugin-react": "^6.0.3",
+    "eslint": "^10.7.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.7.0",
+    "jsdom": "^29.1.1",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
   }
 }

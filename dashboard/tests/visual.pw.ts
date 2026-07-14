@@ -48,13 +48,17 @@ function mockDashboardApi(page: import("@playwright/test").Page) {
 }
 
 test.describe("dashboard visual layout", () => {
-  test("mobile keeps header and download actions inside the viewport", async ({
+  test("mobile keeps header and download actions inside the viewport @layout", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     mockDashboardApi(page);
     await page.addInitScript(() => {
       window.localStorage.setItem("runalert-onboarding-dismissed", "true");
+      window.localStorage.setItem(
+        "runalert-device-credential-v1",
+        "ra1_visual-test-credential"
+      );
     });
 
     await page.goto("/", { waitUntil: "networkidle" });
@@ -100,6 +104,10 @@ test.describe("dashboard visual layout", () => {
       await page.context().grantPermissions(["notifications"]);
       await page.addInitScript(() => {
         window.localStorage.setItem("runalert-onboarding-dismissed", "true");
+        window.localStorage.setItem(
+          "runalert-device-credential-v1",
+          "ra1_visual-test-credential"
+        );
       });
 
       await page.goto("/", { waitUntil: "networkidle" });

@@ -49,45 +49,76 @@ function startWatcher({
   notifyApiUrl = "http://127.0.0.1:18787/notify",
   spawn = childProcess.spawn,
   logger = console,
+  restartMinMs = 1000,
+  restartMaxMs = 30_000,
+  setTimeoutImpl = setTimeout,
+  clearTimeoutImpl = clearTimeout,
 } = {}) {
   if (!configPath) {
     throw new Error("configPath is required");
   }
 
   const sentKeysPath = resolveSentKeysPath(userDataPath);
-  const child = spawn(process.execPath, [watcherScriptPath()], {
-    cwd: resolveAppRootPath(),
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: "1",
-      RUNALERT_CONFIG_PATH: configPath,
-      RUNALERT_SENT_KEYS_PATH: sentKeysPath,
-      RUNALERT_SKIP_API: "1",
-      RUNALERT_DESKTOP_APP: "1",
-      RUNALERT_NOTIFY_API_URL: notifyApiUrl,
-      RUNALERT_NOTIFICATION_ICON: resolveNotificationIconPath(),
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  let child = null;
+  let stopRequested = false;
+  let restartTimer = null;
+  let restartDelayMs = restartMinMs;
 
-  child.stdout?.on("data", (chunk) => {
-    logger.log(`[watcher] ${String(chunk).trimEnd()}`);
-  });
-  child.stderr?.on("data", (chunk) => {
-    logger.warn(`[watcher] ${String(chunk).trimEnd()}`);
-  });
-  child.on?.("error", (error) => {
-    logger.error("[watcher] failed to start", error);
-  });
-  child.on?.("exit", (code, signal) => {
-    logger.log(`[watcher] exited code=${code ?? "null"} signal=${signal ?? "null"}`);
-  });
+  function spawnWatcher() {
+    if (stopRequested) return;
+    child = spawn(process.execPath, [watcherScriptPath()], {
+      cwd: resolveAppRootPath(),
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+        RUNALERT_CONFIG_PATH: configPath,
+        RUNALERT_SENT_KEYS_PATH: sentKeysPath,
+        RUNALERT_SKIP_API: "1",
+        RUNALERT_DESKTOP_APP: "1",
+        RUNALERT_NOTIFY_API_URL: notifyApiUrl,
+        RUNALERT_NOTIFICATION_ICON: resolveNotificationIconPath(),
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    child.stdout?.on("data", (chunk) => {
+      logger.log(`[watcher] ${String(chunk).trimEnd()}`);
+    });
+    child.stderr?.on("data", (chunk) => {
+      logger.warn(`[watcher] ${String(chunk).trimEnd()}`);
+    });
+    child.on?.("error", (error) => {
+      logger.error("[watcher] failed to start", error);
+    });
+    child.on?.("exit", (code, signal) => {
+      logger.log(
+        `[watcher] exited code=${code ?? "null"} signal=${signal ?? "null"}`
+      );
+      if (stopRequested) return;
+      const delay = restartDelayMs;
+      restartDelayMs = Math.min(restartDelayMs * 2, restartMaxMs);
+      logger.warn(`[watcher] restarting in ${delay}ms`);
+      restartTimer = setTimeoutImpl(() => {
+        restartTimer = null;
+        spawnWatcher();
+      }, delay);
+    });
+  }
+
+  spawnWatcher();
 
   return {
-    process: child,
+    get process() {
+      return child;
+    },
     sentKeysPath,
     stop() {
-      if (!child.killed) {
+      stopRequested = true;
+      if (restartTimer) {
+        clearTimeoutImpl(restartTimer);
+        restartTimer = null;
+      }
+      if (child && !child.killed) {
         child.kill();
       }
     },

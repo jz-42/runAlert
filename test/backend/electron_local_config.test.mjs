@@ -34,7 +34,8 @@ describe("electron/local_api", () => {
     });
 
     expect(result.configPath).toBe(path.join(dir, "user-data", "config.json"));
-    expect(result.configDir).toBe(path.join(dir, "user-data", "configs"));
+    expect(result).not.toHaveProperty("configDir");
+    expect(fs.existsSync(path.join(dir, "user-data", "configs"))).toBe(false);
     expect(fs.existsSync(result.configPath)).toBe(true);
 
     const saved = JSON.parse(fs.readFileSync(result.configPath, "utf8"));

@@ -27,7 +27,6 @@ describe("electron/desktop_services", () => {
           server: apiServer,
           url: "http://127.0.0.1:18787",
           configPath: "/tmp/runalert-user-data/config.json",
-          configDir: "/tmp/runalert-user-data/configs",
         };
       },
       startWatcher: (options) => {

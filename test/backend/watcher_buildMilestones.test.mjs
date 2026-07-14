@@ -24,6 +24,17 @@ function at(hhmm) {
 }
 
 describe("watcher helpers", () => {
+  it("keeps a new user's empty streamer list empty", () => {
+    const { STREAMERS, STREAMER_MILESTONES } = buildMilestones({
+      streamers: [],
+      defaultMilestones: { nether: { thresholdSec: 240, enabled: true } },
+      profiles: {},
+    });
+
+    expect(STREAMERS).toEqual([]);
+    expect(STREAMER_MILESTONES).toEqual({});
+  });
+
   // Test: buildMilestones includes profile-only milestones (not just defaults)
   it("buildMilestones includes profile-only milestones (not just defaults)", () => {
     // Beginner summary: if a streamer profile contains milestones not in defaultMilestones,

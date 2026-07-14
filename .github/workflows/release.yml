@@ -1,0 +1,144 @@
+name: Release v1
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            dashboard/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: dashboard
+      - run: npm run test:backend
+      - run: npm run scan:secrets
+      - run: npm run test:dashboard
+      - run: npm run lint
+      - run: npm run dashboard:build
+      - run: npm run audit:production
+      - name: Verify tag and package versions
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/verify-release-version.mjs "${GITHUB_REF_NAME}"
+
+  mac:
+    needs: verify
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            dashboard/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: dashboard
+      - name: Build, sign, notarize, and staple universal Mac release
+        env:
+          CSC_LINK: ${{ secrets.MAC_DEVELOPER_ID_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run electron:pack:mac
+      - name: Verify signature, notarization ticket, and universal executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find dist-app -type d -name 'runAlert.app' -print -quit)"
+          test -n "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          spctl --assess --type execute --verbose=2 "$APP_PATH"
+          xcrun stapler validate "$APP_PATH"
+          ARCHS="$(lipo -archs "$APP_PATH/Contents/MacOS/runAlert")"
+          [[ "$ARCHS" == *arm64* && "$ARCHS" == *x86_64* ]]
+          shasum -a 256 dist-app/*.dmg dist-app/*mac.zip > dist-app/SHA256SUMS-mac.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-mac
+          path: |
+            dist-app/*.dmg
+            dist-app/*mac.zip
+            dist-app/latest-mac.yml
+            dist-app/SHA256SUMS-mac.txt
+          if-no-files-found: error
+
+  windows:
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            dashboard/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: dashboard
+      - name: Build Microsoft Store x64 AppX
+        env:
+          RUNALERT_WINDOWS_IDENTITY_NAME: ${{ secrets.RUNALERT_WINDOWS_IDENTITY_NAME }}
+          RUNALERT_WINDOWS_PUBLISHER: ${{ secrets.RUNALERT_WINDOWS_PUBLISHER }}
+          RUNALERT_WINDOWS_PUBLISHER_DISPLAY_NAME: ${{ secrets.RUNALERT_WINDOWS_PUBLISHER_DISPLAY_NAME }}
+        run: npm run electron:pack:win
+      - name: Validate AppX and write checksum
+        shell: pwsh
+        run: |
+          $package = Get-ChildItem dist-app -Filter *.appx | Select-Object -First 1
+          if (-not $package) { throw "AppX package was not produced" }
+          & makeappx.exe validate /p $package.FullName
+          Get-FileHash $package.FullName -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $($package.Name)" } |
+            Set-Content dist-app/SHA256SUMS-windows.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-store
+          path: |
+            dist-app/*.appx
+            dist-app/SHA256SUMS-windows.txt
+          if-no-files-found: error
+
+  publish-github:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish stable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release-assets/* \
+            --verify-tag \
+            --title "runAlert ${GITHUB_REF_NAME}" \
+            --notes-file CHANGELOG.md

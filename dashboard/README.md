@@ -1,16 +1,24 @@
-# React + Vite
+# runAlert dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React/Vite interface for runAlert. It is used both at `runalert.app` and by
+the sandboxed Electron renderer.
 
-Currently, two official plugins are available:
+```bash
+npm ci
+npm run dev
+npm test
+npm run lint
+npm run build
+npm run test:layout
+npm run test:a11y
+npm run test:visual
+```
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+`VITE_API_BASE` selects the web API during development. In the desktop app the
+preload bridge supplies the dynamic loopback address, so packaged builds do not
+depend on a fixed local port. Browser device credentials and pending offline
+edits live in local storage; desktop credentials are managed by Electron
+`safeStorage` and are never exposed through a URL.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Project-wide setup, architecture, privacy, and release instructions are in the
+[repository README](../README.md).

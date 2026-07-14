@@ -1,11 +1,14 @@
 {
   "name": "runalert",
-  "version": "0.1.0-beta.2",
+  "version": "1.0.0",
   "private": true,
   "description": "Track Minecraft speedruns and alert viewers when a run becomes worth watching.",
   "author": "Jerry Zhan",
   "type": "commonjs",
   "main": "electron/main.js",
+  "engines": {
+    "node": ">=24.17.0 <25"
+  },
   "scripts": {
     "start": "node src/watcher/run_watcher.js",
     "start:web": "node src/api/start_server.js",
@@ -16,9 +19,8 @@
     "electron": "ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache electron .",
     "electron:dev": "concurrently -k -n dashboard,electron \"VITE_API_BASE=http://127.0.0.1:18787 npm --prefix dashboard run dev -- --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache RUNALERT_ELECTRON_DEV=1 RUNALERT_RENDERER_URL=http://127.0.0.1:5173 electron .\"",
     "electron:build": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --dir",
-    "electron:pack:mac": "npm run dashboard:build && RUNALERT_REQUIRE_NOTARIZATION=1 ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --mac dmg zip",
-    "electron:pack:win": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --win nsis --x64",
-    "windows:beta:build": "powershell -ExecutionPolicy Bypass -File scripts/build-windows-beta.ps1",
+    "electron:pack:mac": "npm run dashboard:build && RUNALERT_REQUIRE_NOTARIZATION=1 ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --mac dmg zip --universal --publish never",
+    "electron:pack:win": "npm run dashboard:build && ELECTRON_CACHE=.electron-cache electron_config_cache=.electron-cache ELECTRON_BUILDER_CACHE=.electron-builder-cache electron-builder --win appx --x64 --publish never",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:backend": "vitest run",
@@ -26,28 +28,47 @@
     "test:layout": "npm --prefix dashboard run test:layout",
     "test:visual": "npm --prefix dashboard run test:visual",
     "test:visual:update": "npm --prefix dashboard run test:visual:update",
-    "test:all": "npm run test:backend && npm run test:dashboard && npm run test:layout",
+    "lint": "npm --prefix dashboard run lint",
+    "audit:production": "npm audit --omit=dev --audit-level=high && npm --prefix dashboard audit --omit=dev --audit-level=high",
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "test:all": "npm run test:backend && npm run test:dashboard && npm run lint && npm run dashboard:build && npm run test:layout",
     "test:all:with-visual": "npm run test:all && npm run test:visual"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.2",
-    "node-notifier": "^10.0.1"
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1",
-    "electron": "^42.0.1",
-    "electron-builder": "^26.8.1",
-    "supertest": "^6.3.4",
-    "vitest": "^2.1.8",
-    "wait-on": "^9.0.6"
+    "@electron/notarize": "^3.1.1",
+    "concurrently": "^10.0.3",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.10",
+    "wait-on": "^9.0.10"
   },
   "build": {
     "appId": "app.runalert.desktop",
     "productName": "runAlert",
     "icon": "dashboard/public/icon-1024.png",
     "afterSign": "scripts/notarize-mac.js",
+    "protocols": [
+      {
+        "name": "runAlert pairing",
+        "schemes": [
+          "runalert"
+        ]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "jz-42",
+        "repo": "runAlert",
+        "releaseType": "release"
+      }
+    ],
     "directories": {
       "output": "dist-app"
     },
@@ -55,6 +76,9 @@
       "electron/**/*",
       "src/**/*",
       "dashboard/dist/**/*",
+      "build/icon.iconset/icon_16x16.png",
+      "build/icon.iconset/icon_16x16@2x.png",
+      "build/icon.iconset/icon_32x32.png",
       "config.json",
       "package.json"
     ],
@@ -73,8 +97,16 @@
     },
     "win": {
       "target": [
-        "nsis"
+        "appx"
       ]
+    },
+    "appx": {
+      "applicationId": "runAlert",
+      "identityName": "${env.RUNALERT_WINDOWS_IDENTITY_NAME}",
+      "publisher": "${env.RUNALERT_WINDOWS_PUBLISHER}",
+      "publisherDisplayName": "${env.RUNALERT_WINDOWS_PUBLISHER_DISPLAY_NAME}",
+      "displayName": "runAlert",
+      "backgroundColor": "#F6F5F1"
     }
   }
 }
